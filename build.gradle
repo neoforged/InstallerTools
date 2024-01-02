@@ -1,51 +1,57 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
-  id 'java-library'
-  id 'maven-publish'
-  id 'eclipse'
   id 'org.cadixdev.licenser' version '0.6.1'
-  id 'com.github.johnrengelman.shadow' version '7.1.2'
-  id 'com.github.ben-manes.versions' version '0.42.0'
-  id 'net.neoforged.gradleutils' version '3.0.0-alpha.10'
+  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+  id 'net.neoforged.gradleutils' version '3.0.0-alpha.10' apply false
 }
 
-group = 'net.neoforged.installertools'
+allprojects {
+    apply plugin: 'application'
+    apply plugin: 'maven-publish'
+    apply plugin: 'java-library'
+    apply plugin: 'net.neoforged.gradleutils'
+    apply plugin: 'com.github.johnrengelman.shadow'
+
+    group = 'net.neoforged.installertools'
+    java {
+        withSourcesJar()
+        toolchain.languageVersion = JavaLanguageVersion.of(8)
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    gradleutils.version {
+        branches.suffixBranch()
+    }
+
+    version = gradleutils.version
+    println("${project.name} version: " + version)
+
+    gradleutils.setupSigning(signAllPublications: true)
+
+    tasks.named('jar', Jar).configure {
+        manifest.attributes('Implementation-Version': project.version)
+        manifest.attributes('Main-Class': application.mainClass.get())
+    }
+    tasks.named('shadowJar', ShadowJar).configure {
+        archiveClassifier = 'fatjar'
+    }
+}
 
 base {
     archivesName = 'installertools'
 }
-
-gradleutils.version {
-    branches.suffixBranch()
-}
-
-gradleutils.setupSigning(signAllPublications: true)
-
-version = gradleutils.version
-println('Version: ' + version)
-java.toolchain.languageVersion = JavaLanguageVersion.of(8)
-
-repositories {
-    mavenCentral()
+application {
+    mainClass = 'net.neoforged.installertools.ConsoleTool'
 }
 
 license {
   header project.file('LICENSE-header.txt')
   include 'net/neoforged/installertools/**/*.java'
   newLine false
-}
-
-jar {
-    manifest.attributes('Main-Class': 'net.neoforged.installertools.ConsoleTool')
-    manifest.attributes('Implementation-Version': project.version)
-}
-shadowJar {
-    archiveClassifier = 'fatjar'
-    manifest.attributes('Main-Class': 'net.neoforged.installertools.ConsoleTool')
-    manifest.attributes('Implementation-Version': project.version)
-}
-
-java {
-    withSourcesJar()
 }
 
 dependencies {
@@ -66,24 +72,35 @@ publishing {
             pom {
                 name = 'Installer Tools'
                 description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
-                pomUtils.githubRepo(it, 'InstallerTools')
-
-                licenses {
-                    license {
-                        name = 'LGPLv2.1'
-                        url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
-                    }
-                }
-
-                pomUtils.neoForgedDeveloper(it)
             }
         }
     }
-    repositories {
-        maven gradleutils.publishingMaven
-        maven {
-            name 'local'
-            url file('repo')
+}
+
+allprojects {
+    publishing {
+        publications {
+            withType(MavenPublication).configureEach {
+                it.pom {
+                    rootProject.pomUtils.githubRepo(it, 'InstallerTools')
+
+                    licenses {
+                        license {
+                            name = 'LGPLv2.1'
+                            url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
+                        }
+                    }
+
+                    rootProject.pomUtils.neoForgedDeveloper(it)
+                }
+            }
+        }
+        repositories {
+            maven gradleutils.publishingMaven
+            maven {
+                name 'local'
+                url rootProject.file('repo')
+            }
         }
     }
 }

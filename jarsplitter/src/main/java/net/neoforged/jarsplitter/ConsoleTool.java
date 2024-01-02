@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.jarsplitter;
+package net.neoforged.jarsplitter;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -26,7 +26,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import net.minecraftforge.srgutils.IMappingFile;
+import net.neoforged.srgutils.IMappingFile;
 
 public class ConsoleTool {
     private static final OutputStream NULL_OUTPUT = new OutputStream() {
