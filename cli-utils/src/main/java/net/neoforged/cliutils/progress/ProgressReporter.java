@@ -7,7 +7,8 @@ import java.text.DecimalFormat;
  * A {@link ProgressManager} that forwards all changes to a {@link ProgressReporter#output print stream}
  * that writes the changes with an ANSI modifier {@value #MODIFIER_KEY}. <br>
  * The ANSI modifier takes the form "\033[{@literal progressmanager};action value". <p>
- * The {@link #getDefault() default reporter} will only be enabled if the {@value #ENABLED_PROPERTY} system property is set to {@code true}.
+ * The {@link #getDefault() default reporter} will only be enabled if the {@value #ENABLED_PROPERTY} system property is set to {@code true},
+ * and will output to {@link System#err}.
  * @see ProgressActionType for the actions
  */
 public class ProgressReporter implements ProgressManager {
