@@ -51,6 +51,20 @@ public class TestProgressManager {
         assert suite.out.indeterminate;
     }
 
+    @Test
+    void testWriteIsForwarded() {
+        final TestSuite suite = new TestSuite();
+
+        suite.in.setProgress(10);
+        assert suite.allowedOut.toString().isEmpty();
+
+        suite.stream.println("abcd");
+        assert suite.allowedOut.toString().equals("abcd" + System.lineSeparator());
+
+        suite.stream.println("\033jkas");
+        assert suite.allowedOut.toString().equals("abcd" + System.lineSeparator() + "\033jkas" + System.lineSeparator());
+    }
+
     private static class TestSuite {
         public final ProgressManagerImpl out = new ProgressManagerImpl();
         public final StringWriter allowedOut = new StringWriter();
