@@ -16,7 +16,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools;
 
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
-import net.minecraftforge.installertools.util.HashFunction;
+import net.neoforged.installertools.util.HashFunction;
 
 public class BundlerExtract extends Task {
     private static final Attributes.Name FORMAT = new Attributes.Name("Bundler-Format");

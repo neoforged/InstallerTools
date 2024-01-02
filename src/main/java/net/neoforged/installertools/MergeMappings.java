@@ -16,15 +16,15 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools;
 
-import net.minecraftforge.srgutils.IMappingFile;
-import net.minecraftforge.srgutils.IRenamer;
-import net.minecraftforge.srgutils.IMappingFile.IClass;
-import net.minecraftforge.srgutils.IMappingFile.IField;
-import net.minecraftforge.srgutils.IMappingFile.IMethod;
-import net.minecraftforge.srgutils.IMappingFile.IPackage;
-import net.minecraftforge.srgutils.IMappingFile.IParameter;
+import net.neoforged.srgutils.IMappingFile;
+import net.neoforged.srgutils.IRenamer;
+import net.neoforged.srgutils.IMappingFile.IClass;
+import net.neoforged.srgutils.IMappingFile.IField;
+import net.neoforged.srgutils.IMappingFile.IMethod;
+import net.neoforged.srgutils.IMappingFile.IPackage;
+import net.neoforged.srgutils.IMappingFile.IParameter;
 
 public class MergeMappings extends ChainMappings {
     @Override

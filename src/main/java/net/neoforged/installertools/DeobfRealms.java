@@ -16,7 +16,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,10 +38,10 @@ import net.md_5.specialsource.ProgressMeter;
 import net.md_5.specialsource.SpecialSource;
 import net.md_5.specialsource.provider.JarProvider;
 import net.md_5.specialsource.provider.JointProvider;
-import net.minecraftforge.installertools.util.HashFunction;
-import net.minecraftforge.installertools.util.VersionJson;
-import net.minecraftforge.installertools.util.VersionJson.Library;
-import net.minecraftforge.installertools.util.VersionJson.LibraryDownload;
+import net.neoforged.installertools.util.HashFunction;
+import net.neoforged.installertools.util.VersionJson;
+import net.neoforged.installertools.util.VersionJson.Library;
+import net.neoforged.installertools.util.VersionJson.LibraryDownload;
 
 public class DeobfRealms extends Task {
 

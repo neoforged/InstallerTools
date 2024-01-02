@@ -16,7 +16,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -51,7 +51,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import net.minecraftforge.installertools.util.Utils;
+import net.neoforged.installertools.util.Utils;
 
 public class SrgMcpRenamer extends Task {
     @Override

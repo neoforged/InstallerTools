@@ -16,7 +16,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,7 +25,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
-public class CreateParents extends Task {
+public class CreateDirectory extends Task {
 
     @Override
     public void process(String[] args) throws IOException {
@@ -40,9 +40,9 @@ public class CreateParents extends Task {
 
             log("Target: " + target);
 
-            if (!target.getParentFile().exists() && !target.getParentFile().mkdirs())
+            if (!target.exists() && !target.mkdirs())
                 error("Could not make folders: " + target);
-            log("Parents created");
+            log("Directory created");
         } catch (OptionException e) {
             parser.printHelpOn(System.out);
             e.printStackTrace();

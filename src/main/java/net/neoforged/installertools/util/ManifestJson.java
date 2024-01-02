@@ -16,19 +16,27 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.minecraftforge.installertools;
+package net.neoforged.installertools.util;
 
-import java.io.IOException;
+import java.net.URL;
 
-public abstract class Task {
-    public abstract void process(String[] args) throws IOException;
+public class ManifestJson {
+    public VersionInfo[] versions;
 
-    protected void error(String message) {
-        log(message);
-        throw new RuntimeException(message);
+    public static class VersionInfo {
+        public String id;
+        public URL url;
     }
 
-    protected void log(String message) {
-        System.out.println(message);
+    public URL getUrl(String version) {
+        if (version == null) {
+            return null;
+        }
+        for (VersionInfo info : versions) {
+            if (version.equals(info.id)) {
+                return info.url;
+            }
+        }
+        return null;
     }
 }
