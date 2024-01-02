@@ -97,10 +97,6 @@ allprojects {
         }
         repositories {
             maven gradleutils.publishingMaven
-            maven {
-                name 'local'
-                url rootProject.file('repo')
-            }
         }
     }
 }
