@@ -1,1 +1,2 @@
+include(':cli-utils')
 include(':jarsplitter')
