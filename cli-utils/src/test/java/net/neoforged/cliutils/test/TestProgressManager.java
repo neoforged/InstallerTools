@@ -5,10 +5,7 @@ import net.neoforged.cliutils.progress.ProgressManager;
 import net.neoforged.cliutils.progress.ProgressReporter;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.io.StringWriter;
 
