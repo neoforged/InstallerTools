@@ -1,0 +1,87 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import net.minecraftforge.gradleutils.PomUtils
+
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'maven-publish'
+    id 'org.cadixdev.licenser' version '0.6.1'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'net.minecraftforge.gradleutils' version '2.+'
+}
+
+group = 'net.minecraftforge'
+version = gradleutils.getTagOffsetVersion()
+println "Version: $version"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+    maven gradleutils.forgeMaven
+}
+
+dependencies {
+    implementation 'net.sf.jopt-simple:jopt-simple:5.0.4'
+    implementation 'net.minecraftforge:srgutils:0.4.3'
+}
+
+license {
+    header = file('LICENSE-header.txt')
+    newLine = false
+    exclude '**/*.properties'
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            'Main-Class': 'net.minecraftforge.jarsplitter.ConsoleTool',
+            'Implementation-Version': project.version
+        ])
+    }
+}
+
+tasks.named('shadowJar', ShadowJar).configure {
+    archiveClassifier = 'fatjar'
+    manifest {
+        attributes([
+            'Main-Class': 'net.minecraftforge.jarsplitter.ConsoleTool',
+            'Implementation-Version': project.version
+        ])
+    }
+}
+
+artifacts {
+    archives shadowJar
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+
+        artifactId = 'jarsplitter'
+
+        pom {
+            name = 'Jar Splitter'
+            description = 'Splits a jar file into classes and data, used in the Forge installer'
+            url = 'https://github.com/MinecraftForge/JarSplitter'
+
+            PomUtils.setGitHubDetails(pom, 'JarSplitter')
+
+            license PomUtils.Licenses.LGPLv2_1
+
+            developers {
+                developer PomUtils.Developers.LexManos
+            }
+        }
+    }
+
+    repositories {
+        maven gradleutils.getPublishingForgeMaven()
+    }
+}
