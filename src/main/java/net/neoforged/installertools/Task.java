@@ -18,9 +18,13 @@
  */
 package net.neoforged.installertools;
 
+import net.neoforged.cliutils.progress.ProgressReporter;
+
 import java.io.IOException;
 
 public abstract class Task {
+    protected static final ProgressReporter PROGRESS = ProgressReporter.getDefault();
+
     public abstract void process(String[] args) throws IOException;
 
     protected void error(String message) {

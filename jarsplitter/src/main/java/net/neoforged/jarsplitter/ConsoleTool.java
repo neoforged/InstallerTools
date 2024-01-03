@@ -11,13 +11,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -26,12 +30,16 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import net.neoforged.cliutils.progress.ProgressManager;
+import net.neoforged.cliutils.progress.ProgressReporter;
 import net.neoforged.srgutils.IMappingFile;
 
 public class ConsoleTool {
     private static final OutputStream NULL_OUTPUT = new OutputStream() {
-        @Override public void write(int b) throws IOException {}
+        @Override public void write(int b) {}
     };
+    private static final boolean DEBUG = Boolean.getBoolean("net.neoforged.jarsplitter.debug");
+    private static final ProgressManager PROGRESS = ProgressReporter.getDefault();
 
     public static void main(String[] args) throws IOException {
         TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!
@@ -89,8 +97,12 @@ public class ConsoleTool {
                 return;
             }
 
-            log("Splitting: ");
-            try (ZipInputStream zinput = new ZipInputStream(new FileInputStream(input));
+            final int fileAmount = getCountInZip(input);
+            PROGRESS.setMaxProgress(fileAmount);
+            log("Splitting " + fileAmount + " files:");
+
+            int amount = 0;
+            try (ZipInputStream zinput = new ZipInputStream(Files.newInputStream(input.toPath()));
                  ZipOutputStream zslim = new ZipOutputStream(slim == null ? NULL_OUTPUT : new FileOutputStream(slim));
                  ZipOutputStream zdata = new ZipOutputStream(data == null ? NULL_OUTPUT : new FileOutputStream(data));
                  ZipOutputStream zextra = new ZipOutputStream(extra == null ? NULL_OUTPUT : new FileOutputStream(extra))) {
@@ -101,18 +113,25 @@ public class ConsoleTool {
                        String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
 
                        if (whitelist.isEmpty() || whitelist.contains(key)) {
-                           log("  Slim  " + entry.getName());
+                           debug("  Slim  " + entry.getName());
                            copy(entry, zinput, zslim);
                        } else {
-                           log("  Extra " + entry.getName());
+                           debug("  Extra " + entry.getName());
                            copy(entry, zinput, zextra);
                        }
                    } else {
-                       log("  Data  " + entry.getName());
+                       debug("  Data  " + entry.getName());
                        copy(entry, zinput, merge ? zextra : zdata);
+                   }
+
+                   // To avoid spam, only change the progress every 10 files processed
+                   if ((++amount) % 10 == 0) {
+                       PROGRESS.setProgress(amount);
                    }
                }
             }
+            PROGRESS.setProgress(fileAmount);
+
             writeCache(slim, inputSha, srgSha);
             writeCache(data, inputSha, srgSha);
             writeCache(extra, inputSha, srgSha);
@@ -177,7 +196,13 @@ public class ConsoleTool {
         System.out.println(message);
     }
 
-    private static String sha1(Set<String> data) throws IOException {
+    public static void debug(String message) {
+        if (DEBUG) {
+            log(message);
+        }
+    }
+
+    private static String sha1(Set<String> data) {
         if (data.isEmpty())
             return "empty";
 
@@ -201,14 +226,21 @@ public class ConsoleTool {
 
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            try(InputStream input = new FileInputStream(path)) {
-                int read = -1;
+            try (InputStream input = Files.newInputStream(path.toPath())) {
+                int read;
                 while ((read = input.read(BUFFER)) != -1)
                     digest.update(BUFFER, 0, read);
                 return new BigInteger(1, digest.digest()).toString(16);
             }
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private static int getCountInZip(File path) throws IOException {
+        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null); final Stream<Path> count = Files.find(fs.getPath("."), Integer.MAX_VALUE, (p, basicFileAttributes) -> Files.isRegularFile(p))) {
+            final long c = count.count();
+            return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
         }
     }
 }

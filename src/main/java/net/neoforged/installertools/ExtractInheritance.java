@@ -82,6 +82,9 @@ public class ExtractInheritance extends Task {
         OptionSpec<File> libraryO = parser.accepts("lib").withRequiredArg().ofType(File.class);
         OptionSpec<Void> annotationsO = parser.accepts("annotations");
 
+        // We don't know how long reading the jars will take
+        PROGRESS.setIndeterminate(true);
+
         try {
             OptionSet options = parser.parse(args);
 
@@ -108,8 +111,17 @@ public class ExtractInheritance extends Task {
                 readJar(lib, libClasses, annotations);
             }
 
-            for (Entry<String, ClassInfo> entry : inClasses.entrySet())
+            PROGRESS.setIndeterminate(false);
+            PROGRESS.setMaxProgress(inClasses.size());
+
+            int am = 0;
+            for (Entry<String, ClassInfo> entry : inClasses.entrySet()) {
                 resolveClass(entry.getValue(), annotations);
+                if ((++am) % 10 == 0) {
+                    PROGRESS.setProgress(am);
+                }
+            }
+            PROGRESS.setProgress(am);
 
             Files.write(output.toPath(), GSON.toJson(inClasses).getBytes(StandardCharsets.UTF_8));
 

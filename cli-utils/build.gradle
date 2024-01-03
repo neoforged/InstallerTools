@@ -1,0 +1,18 @@
+dependencies {
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.8.2')
+    testImplementation('org.junit.jupiter:junit-jupiter-engine:5.8.2')
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+        pom {
+            name = 'CLI Utils'
+            description = "CLI Utilities for NeoForge's projects"
+        }
+    }
+}

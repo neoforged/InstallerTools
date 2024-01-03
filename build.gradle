@@ -11,7 +11,9 @@ allprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'java-library'
     apply plugin: 'net.neoforged.gradleutils'
-    apply plugin: 'com.github.johnrengelman.shadow'
+    if (project.name != 'cli-utils') {
+        apply plugin: 'com.github.johnrengelman.shadow'
+    }
 
     group = 'net.neoforged.installertools'
     java {
@@ -34,10 +36,15 @@ allprojects {
 
     tasks.named('jar', Jar).configure {
         manifest.attributes('Implementation-Version': project.version)
-        manifest.attributes('Main-Class': application.mainClass.get())
+        if (application.mainClass.getOrNull()) {
+            manifest.attributes('Main-Class': application.mainClass.get())
+        }
     }
-    tasks.named('shadowJar', ShadowJar).configure {
-        archiveClassifier = 'fatjar'
+
+    if (project.name != 'cli-utils') {
+        tasks.named('shadowJar', ShadowJar).configure {
+            archiveClassifier = 'fatjar'
+        }
     }
 }
 
@@ -61,6 +68,7 @@ dependencies {
     implementation 'de.siegmar:fastcsv:2.0.0'
     implementation 'net.neoforged:srgutils:1.0.0'
     implementation 'org.ow2.asm:asm-commons:9.3'
+    implementation project(':cli-utils')
 }
 
 publishing {

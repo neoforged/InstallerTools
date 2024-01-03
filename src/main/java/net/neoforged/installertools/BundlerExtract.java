@@ -89,6 +89,8 @@ public class BundlerExtract extends Task {
                 FileList libraries = FileList.read(fs.getPath("META-INF", "libraries.list"));
                 FileList versions = FileList.read(fs.getPath("META-INF", "versions.list"));
 
+                int amount = 0;
+
                 if (jarOnly) {
                     FileList.Entry entry = null;
                     for (FileList.Entry e : versions.entries) {
@@ -106,16 +108,24 @@ public class BundlerExtract extends Task {
                     if (output.exists() && output.isFile())
                         error("Can not extract to " + output + " as it is a file, not a directory");
 
-                    for (FileList.Entry entry : libraries.entries)
+                    PROGRESS.setMaxProgress(libraries.entries.size());
+                    for (FileList.Entry entry : libraries.entries) {
                         extractFile("libraries", fs, entry, new File(output, entry.path));
+                        PROGRESS.setProgress(++amount);
+                    }
                 } else if (all) {
                     if (output.exists() && output.isFile())
                         error("Can not extract to " + output + " as it is a file, not a directory");
 
-                    for (FileList.Entry entry : libraries.entries)
+                    PROGRESS.setMaxProgress(libraries.entries.size() + versions.entries.size());
+                    for (FileList.Entry entry : libraries.entries) {
                         extractFile("libraries", fs, entry, new File(output, "libraries/" + entry.path));
-                    for (FileList.Entry entry : versions.entries)
+                        PROGRESS.setProgress(++amount);
+                    }
+                    for (FileList.Entry entry : versions.entries) {
                         extractFile("versions", fs, entry, new File(output, "versions/" + entry.path));
+                        PROGRESS.setProgress(++amount);
+                    }
                 } else {
                     error("Must specify either --jar only, or --all");
                 }

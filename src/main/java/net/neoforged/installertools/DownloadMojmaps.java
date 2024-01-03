@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Files;
 
 public class DownloadMojmaps extends Task {
@@ -76,7 +77,8 @@ public class DownloadMojmaps extends Task {
                     if (download == null || download.url == null)
                         error("Missing download info for " + side + " mappings");
 
-                    Files.copy(download.url.openStream(), output.toPath());
+                    final URLConnection connection = download.url.openConnection();
+                    Files.copy(PROGRESS.wrapDownload(connection), output.toPath());
                     log("Downloaded Mojang mappings for " + mcversion);
                 }
             }
