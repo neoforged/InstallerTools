@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.binarypatcher;
+package net.neoforged.binarypatcher;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +16,7 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
 public class ConsoleTool {
+    public static final boolean DEBUG = Boolean.getBoolean("net.neoforged.binarypatcher.debug");
     public static final long ZIPTIME = 628041600000L;
     public static void main(String[] args) throws IOException {
         TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!

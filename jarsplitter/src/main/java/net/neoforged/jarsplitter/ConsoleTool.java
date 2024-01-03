@@ -5,23 +5,18 @@
 package net.neoforged.jarsplitter;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -30,6 +25,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import net.neoforged.cliutils.JarUtils;
 import net.neoforged.cliutils.progress.ProgressManager;
 import net.neoforged.cliutils.progress.ProgressReporter;
 import net.neoforged.srgutils.IMappingFile;
@@ -97,7 +93,7 @@ public class ConsoleTool {
                 return;
             }
 
-            final int fileAmount = getCountInZip(input);
+            final int fileAmount = JarUtils.getFileCountInZip(input);
             PROGRESS.setMaxProgress(fileAmount);
             log("Splitting " + fileAmount + " files:");
 
@@ -237,10 +233,4 @@ public class ConsoleTool {
         }
     }
 
-    private static int getCountInZip(File path) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null); final Stream<Path> count = Files.find(fs.getPath("."), Integer.MAX_VALUE, (p, basicFileAttributes) -> Files.isRegularFile(p))) {
-            final long c = count.count();
-            return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
-        }
-    }
 }

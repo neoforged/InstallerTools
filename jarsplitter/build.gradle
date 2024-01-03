@@ -1,8 +1,8 @@
 evaluationDependsOn(':cli-utils')
 
 dependencies {
-    implementation 'net.sf.jopt-simple:jopt-simple:5.0.4'
-    implementation 'net.neoforged:srgutils:1.0.0'
+    implementation(libs.jopt)
+    implementation(libs.srgutils)
     implementation project(':cli-utils')
 }
 

@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.binarypatcher;
+package net.neoforged.binarypatcher;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,7 +33,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import lzma.streams.LzmaOutputStream;
-import net.minecraftforge.srgutils.IMappingFile;
+import net.neoforged.srgutils.IMappingFile;
 
 public class Generator {
     public static final String EXTENSION = ".lzma";

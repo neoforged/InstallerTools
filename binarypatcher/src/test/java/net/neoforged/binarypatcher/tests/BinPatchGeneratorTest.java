@@ -2,11 +2,11 @@
  * Copyright (c) Forge Development LLC
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.binarypatcher.tests;
+package net.neoforged.binarypatcher.tests;
 
-import net.minecraftforge.binarypatcher.Generator;
-import net.minecraftforge.binarypatcher.Patch;
-import net.minecraftforge.binarypatcher.Patcher;
+import net.neoforged.binarypatcher.Generator;
+import net.neoforged.binarypatcher.Patch;
+import net.neoforged.binarypatcher.Patcher;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

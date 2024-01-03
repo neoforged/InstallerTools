@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.binarypatcher;
+package net.neoforged.binarypatcher;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
