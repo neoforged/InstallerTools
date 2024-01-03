@@ -1,0 +1,10 @@
+/.gradle/
+/.idea/
+/build/
+/repo/
+/.settings/
+/bin/
+.classpath
+.project
+*.lzma
+!/src/test/resources/example_data.lzma

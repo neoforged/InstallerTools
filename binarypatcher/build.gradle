@@ -1,0 +1,93 @@
+import net.minecraftforge.gradleutils.PomUtils
+
+plugins {
+    id 'maven-publish'
+    id 'java-library'
+    id 'eclipse'
+    id 'org.cadixdev.licenser' version '0.6.1'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.github.ben-manes.versions' version '0.49.0'
+    id 'net.minecraftforge.gradleutils' version '[2.1.2,)'
+    id 'net.minecraftforge.gradlejarsigner' version '1.0.4'
+}
+
+group = 'net.minecraftforge'
+version = gradleutils.tagOffsetVersion
+println("Version: $version")
+jarSigner.autoDetect()
+
+repositories {
+    mavenCentral()
+    maven gradleutils.forgeMaven
+}
+
+license {
+  header file('LICENSE-header.txt')
+  newLine false
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(8)
+    withSourcesJar()
+}
+
+tasks.named('jar').configure {
+    manifest {
+        attributes([
+            'Main-Class': 'net.minecraftforge.binarypatcher.ConsoleTool',
+            'Specification-Title':   'Binary Patcher',
+            'Specification-Vendor':  'Forge Development LLC',
+            'Specification-Version':  gradleutils.gitInfo.tag,
+            'Implementation-Title':  "$project.group:$project.name",
+            'Implementation-Vendor': 'Forge Development LLC',
+            'Implementation-Version': project.version
+        ] as LinkedHashMap)
+    }
+    jarSigner.sign(it)
+}
+
+tasks.named('shadowJar').configure {
+    archiveClassifier = 'fatjar'
+    jarSigner.sign(it)
+}
+
+artifacts {
+    archives shadowJar
+}
+
+dependencies {
+    implementation(libs.srgutils)
+    implementation(libs.jopt.simple)
+    implementation(libs.lzma)
+    implementation(libs.xdelta)
+
+    testImplementation(libs.junit.api)
+    testRuntimeOnly(libs.bundles.junit.runtime)
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+        artifactId = 'binarypatcher'
+        pom {
+            name = 'Binary Patcher'
+            description = 'Creates and applies binary patches for jar files at the class level.'
+            url = 'https://github.com/MinecraftForge/BinaryPatcher'
+
+            PomUtils.setGitHubDetails(pom, 'BinaryPatcher')
+
+            license PomUtils.Licenses.LGPLv2_1
+
+            developers {
+                developer PomUtils.Developers.LexManos
+            }
+        }
+    }
+    repositories {
+        maven gradleutils.publishingForgeMaven
+    }
+}
