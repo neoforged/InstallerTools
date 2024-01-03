@@ -38,6 +38,7 @@ public class Patcher {
     public static final String EXTENSION = ".lzma";
     private static final byte[] EMPTY_DATA = new byte[0];
     private static final GDiffPatcher PATCHER = new GDiffPatcher();
+    private static final ProgressReporter PROGRESS = ProgressReporter.getDefault();
 
     private Map<String, List<Patch>> patches = new TreeMap<>();
 
@@ -85,6 +86,7 @@ public class Patcher {
     // They will be applied in the order that the patch files were loaded.
     public void loadPatches(File file, String prefix) throws IOException {
         log("Loading patches file: " + file);
+        PROGRESS.setStep("Loading patch files");
 
         try (InputStream input = new FileInputStream(file)) {
             InputStream stream = new LzmaInputStream(input, new Decoder());
@@ -117,8 +119,8 @@ public class Patcher {
         if (output.exists() && !output.delete())
             throw new IOException("Failed to delete existing output file: " + output);
 
-        final ProgressReporter progress = ProgressReporter.getDefault();
-        progress.setMaxProgress(JarUtils.getFileCountInZip(clean));
+        PROGRESS.setStep("Patching input");
+        PROGRESS.setMaxProgress(JarUtils.getFileCountInZip(clean));
         try (ZipInputStream zclean = new ZipInputStream(new FileInputStream(clean));
              ZipOutputStream zpatched = new ZipOutputStream(new FileOutputStream(output))) {
 
@@ -154,11 +156,12 @@ public class Patcher {
 
                 // Do updates in batches of 10 to avoid spam
                 if ((++amount) % 10 == 0) {
-                    progress.setProgress(amount);
+                    PROGRESS.setProgress(amount);
                 }
             }
 
             // Add new files
+            PROGRESS.setStep("Adding new files");
             for (Entry<String, List<Patch>> e : patches.entrySet()) {
                 String key = e.getKey();
                 List<Patch> patchlist = e.getValue();
@@ -178,7 +181,7 @@ public class Patcher {
                 }
             }
 
-            progress.setProgress(amount);
+            PROGRESS.setProgress(amount);
          }
     }
 
