@@ -38,6 +38,7 @@ public class ConsoleTool {
     private static final OutputStream NULL_OUTPUT = new OutputStream() {
         @Override public void write(int b) {}
     };
+    private static final boolean DEBUG = Boolean.getBoolean("net.neoforged.jarsplitter.debug");
     private static final ProgressManager PROGRESS = ProgressReporter.getDefault();
 
     public static void main(String[] args) throws IOException {
@@ -96,9 +97,9 @@ public class ConsoleTool {
                 return;
             }
 
-            log("Splitting: ");
             final int fileAmount = getCountInZip(input);
             PROGRESS.setMaxProgress(fileAmount);
+            log("Splitting " + fileAmount + " files:");
 
             int amount = 0;
             try (ZipInputStream zinput = new ZipInputStream(Files.newInputStream(input.toPath()));
@@ -112,17 +113,19 @@ public class ConsoleTool {
                        String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
 
                        if (whitelist.isEmpty() || whitelist.contains(key)) {
+                           debug("  Slim  " + entry.getName());
                            copy(entry, zinput, zslim);
                        } else {
+                           debug("  Extra " + entry.getName());
                            copy(entry, zinput, zextra);
                        }
                    } else {
-                       log("  Data  " + entry.getName());
+                       debug("  Data  " + entry.getName());
                        copy(entry, zinput, merge ? zextra : zdata);
                    }
 
-                   amount++;
-                   if (amount % 100 == 0) {
+                   // To avoid spam, only change the progress every 10 files processed
+                   if ((++amount) % 10 == 0) {
                        PROGRESS.setProgress(amount);
                    }
                }
@@ -191,6 +194,12 @@ public class ConsoleTool {
 
     public static void log(String message) {
         System.out.println(message);
+    }
+
+    public static void debug(String message) {
+        if (DEBUG) {
+            log(message);
+        }
     }
 
     private static String sha1(Set<String> data) {

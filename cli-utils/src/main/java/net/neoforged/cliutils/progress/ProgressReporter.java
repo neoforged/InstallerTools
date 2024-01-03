@@ -1,6 +1,10 @@
 package net.neoforged.cliutils.progress;
 
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.net.URLConnection;
 import java.text.DecimalFormat;
 
 /**
@@ -63,5 +67,48 @@ public class ProgressReporter implements ProgressManager {
             exception.printStackTrace(System.err);
             System.err.println("Failed to write progress: " + exception);
         }
+    }
+
+    public InputStream wrapDownload(URLConnection connection) throws IOException {
+        connection.connect();
+        setMaxProgress(connection.getContentLength());
+        return wrapDownload(connection.getInputStream());
+    }
+
+    public InputStream wrapDownload(InputStream in) {
+        return new FilterInputStream(in) {
+            private int nread = 0;
+
+            @Override
+            public int read() throws IOException {
+                int c = in.read();
+                if (c >= 0) setProgress(++nread);
+                return c;
+            }
+
+
+            @Override
+            public int read(byte[] b) throws IOException {
+                int nr = in.read(b);
+                if (nr > 0) setProgress(nread += nr);
+                return nr;
+            }
+
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                int nr = in.read(b, off, len);
+                if (nr > 0) setProgress(nread += nr);
+                return nr;
+            }
+
+
+            @Override
+            public long skip(long n) throws IOException {
+                long nr = in.skip(n);
+                if (nr > 0) setProgress(nread += nr);
+                return nr;
+            }
+        };
     }
 }

@@ -57,30 +57,20 @@ public class ExtractFiles extends Task {
             List<File> execs = options.valuesOf(execsO);
             List<String> optional = options.valuesOf(optionalO).stream().map(File::getAbsolutePath).collect(Collectors.toList());
 
-            /*
-            Map<String, String> tokens = new HashMap<>();
-            String prev = null;
-            for (String s : options.valuesOf(tokensO)) {
-                if (prev == null) {
-                    prev = s;
-                } else {
-                    tokens.put(prev, s);
-                    prev = null;
-                }
-            }
-            */
-
             log("Archive: " + archive);
             for (int x = 0; x < from.size(); x++) {
-            log("Extract: " + from.get(x));
-            log("         " + to.get(x));
+                log("Extract: " + from.get(x));
+                log("         " + to.get(x));
             }
-            for (int x = 0; x < execs.size(); x++) {
-            log("Exec:    " + execs.get(x));
+            for (File file : execs) {
+                log("Exec:    " + file);
             }
 
             if (!archive.exists())
                 error("Could not find archive: " + archive);
+
+            PROGRESS.setMaxProgress(from.size() + execs.size());
+            int amount = 0;
 
             try (FileSystem fs = FileSystems.newFileSystem(archive.toPath(), null)) {
                 for (int x = 0; x < from.size(); x++) {
@@ -95,26 +85,14 @@ public class ExtractFiles extends Task {
                     if (!optional.contains(toF.getAbsolutePath()) || !toF.exists())
                         Files.copy(path, toF.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-                    /*
-                    if (filesReplace != null && filesReplace.contains(file)) {
-                        List<String> lines = Files.readAllLines(path).stream()
-                                .map(s -> {
-                                    for (Map.Entry<String, String> entry : tokens.entrySet()) {
-                                        s = s.replace(entry.getKey(), entry.getValue());
-                                    }
-                                    return s;
-                                }).collect(Collectors.toList());
-                        Files.write(copyTo, lines);
-                    } else {
-                        Files.copy(path, copyTo, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                    */
+                    PROGRESS.setProgress(++amount);
                 }
             }
 
             for (File exec : execs) {
                 if (!exec.setExecutable(true))
                     log("Couldn't set executable bit for file: " + exec.getAbsolutePath());
+                PROGRESS.setProgress(++amount);
             }
         } catch (OptionException e) {
             parser.printHelpOn(System.out);
