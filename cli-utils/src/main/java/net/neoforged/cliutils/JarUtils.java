@@ -6,13 +6,20 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.stream.Stream;
 
 public class JarUtils {
     public static int getFileCountInZip(File path) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null); final Stream<Path> count = Files.find(fs.getPath("/"), Integer.MAX_VALUE, (p, basicFileAttributes) -> basicFileAttributes.isRegularFile())) {
-            final long c = count.count();
-            return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
+        long c = 0;
+        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null)) {
+            final Iterator<Path> roots = fs.getRootDirectories().iterator();
+            while (roots.hasNext()) {
+                try (final Stream<Path> count = Files.find(roots.next(), Integer.MAX_VALUE, (p, basicFileAttributes) -> basicFileAttributes.isRegularFile())) {
+                    c += count.count();
+                }
+            }
         }
+        return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
     }
 }
