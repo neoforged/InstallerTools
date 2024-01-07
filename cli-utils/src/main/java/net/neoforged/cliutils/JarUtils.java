@@ -10,7 +10,7 @@ import java.util.stream.Stream;
 
 public class JarUtils {
     public static int getFileCountInZip(File path) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null); final Stream<Path> count = Files.find(fs.getPath("."), Integer.MAX_VALUE, (p, basicFileAttributes) -> Files.isRegularFile(p))) {
+        try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null); final Stream<Path> count = Files.find(fs.getPath("/"), Integer.MAX_VALUE, (p, basicFileAttributes) -> basicFileAttributes.isRegularFile())) {
             final long c = count.count();
             return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
         }
