@@ -13,11 +13,9 @@ public class JarUtils {
     public static int getFileCountInZip(File path) throws IOException {
         long c = 0;
         try (FileSystem fs = FileSystems.newFileSystem(path.toPath(), null)) {
-            final Iterator<Path> roots = fs.getRootDirectories().iterator();
-            while (roots.hasNext()) {
-                try (final Stream<Path> count = Files.find(roots.next(), Integer.MAX_VALUE, (p, basicFileAttributes) -> basicFileAttributes.isRegularFile())) {
-                    c += count.count();
-                }
+            for (Path root : fs.getRootDirectories()) {
+            try (final Stream<Path> count = Files.find(root, Integer.MAX_VALUE, (p, basicFileAttributes) -> basicFileAttributes.isRegularFile())) {
+                c += count.count();
             }
         }
         return c > (long) Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) c;
