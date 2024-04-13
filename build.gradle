@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import net.neoforged.gradleutils.PomUtilsExtension.License
 
 plugins {
   id 'org.cadixdev.licenser' version '0.6.1'
@@ -48,6 +49,10 @@ allprojects {
     }
 }
 
+gradleutils {
+    setupCentralPublishing()
+}
+
 base {
     archivesName = 'installertools'
 }
@@ -90,16 +95,9 @@ allprojects {
         publications {
             withType(MavenPublication).configureEach {
                 it.pom {
-                    rootProject.pomUtils.githubRepo(it, 'InstallerTools')
-
-                    licenses {
-                        license {
-                            name = 'LGPLv2.1'
-                            url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
-                        }
-                    }
-
-                    rootProject.pomUtils.neoForgedDeveloper(it)
+                    pomUtils.githubRepo(it, 'InstallerTools')
+                    pomUtils.license(it, License.LGPL_v2)
+                    pomUtils.neoForgedDeveloper(it)
                 }
             }
         }
