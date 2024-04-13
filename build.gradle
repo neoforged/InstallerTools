@@ -50,6 +50,7 @@ allprojects {
 }
 
 gradleutils {
+    setupSigning()
     setupCentralPublishing()
 }
 

@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   publish-prs:
-    if: true
+    if: false # Option not enabled when the workflows were generated
     uses: neoforged/actions/.github/workflows/publish-prs.yml@main
     with:
       artifact_base_path: net/neoforged/installertools/
