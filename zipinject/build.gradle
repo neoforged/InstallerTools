@@ -1,0 +1,25 @@
+dependencies {
+    implementation(libs.jopt)
+    testImplementation(libs.bundles.junit)
+}
+
+application {
+    mainClass = 'net.neoforged.zipinject.ConsoleTool'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+
+        artifactId = 'zipinject'
+
+        pom {
+            name = 'Zip Inject'
+            description = 'Injects a folder or another zip into a zip'
+        }
+    }
+}

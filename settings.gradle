@@ -5,7 +5,8 @@ dependencyResolutionManagement {
             library('junit-api', 'org.junit.jupiter', 'junit-jupiter-api').versionRef('junit')
             library('junit-engine', 'org.junit.jupiter', 'junit-jupiter-engine').versionRef('junit')
             library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.10.0')
-            bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api'])
+            library('assert4j', 'org.assertj:assertj-core:3.25.1')
+            bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'assert4j'])
 
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
@@ -18,3 +19,4 @@ dependencyResolutionManagement {
 include(':cli-utils')
 include(':jarsplitter')
 include(':binarypatcher')
+include(':zipinject')
