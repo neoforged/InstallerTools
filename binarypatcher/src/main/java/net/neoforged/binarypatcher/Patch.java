@@ -12,6 +12,8 @@ import java.io.InputStream;
 import java.util.zip.Adler32;
 
 import com.nothome.delta.Delta;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
 
 public class Patch {
     private static final byte[] EMPTY_DATA = new byte[0];
@@ -32,9 +34,17 @@ public class Patch {
     }
 
     public static Patch from(String obf, String srg, byte[] clean, byte[] dirty) throws IOException {
-        byte[] diff = dirty.length == 0 ? EMPTY_DATA : DELTA.compute(clean, dirty);
+        byte[] diff = dirty.length == 0 ? EMPTY_DATA : DELTA.compute(clean, shrinkDirtyForPatch(clean, dirty));
         int checksum = clean.length == 0 ? 0 : adlerHash(clean);
         return new Patch(obf, srg, clean.length != 0, checksum, diff);
+    }
+
+    private static byte[] shrinkDirtyForPatch(byte[] clean, byte[] dirty) {
+        final ClassReader cleanReader = new ClassReader(clean);
+        final ClassReader dirtyReader = new ClassReader(dirty);
+        final ClassWriter writer = new ClassWriter(cleanReader, 0);
+        dirtyReader.accept(writer, 0);
+        return writer.toByteArray();
     }
 
     public byte[] toBytes() {

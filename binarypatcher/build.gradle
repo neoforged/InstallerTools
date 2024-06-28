@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.jopt)
     implementation(libs.lzma)
     implementation(libs.xdelta)
+    implementation(libs.asm)
     implementation(project(':cli-utils'))
 
     testImplementation(libs.bundles.junit)
