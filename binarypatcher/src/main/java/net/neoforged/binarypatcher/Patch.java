@@ -40,6 +40,9 @@ public class Patch {
     }
 
     private static byte[] shrinkDirtyForPatch(byte[] clean, byte[] dirty) {
+        if (clean.length == 0) {
+            return dirty;
+        }
         final ClassReader cleanReader = new ClassReader(clean);
         final ClassReader dirtyReader = new ClassReader(dirty);
         final ClassWriter writer = new ClassWriter(cleanReader, 0);
