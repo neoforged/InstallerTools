@@ -33,8 +33,11 @@ public class Patch {
         this.data = data;
     }
 
-    public static Patch from(String obf, String srg, byte[] clean, byte[] dirty) throws IOException {
-        byte[] diff = dirty.length == 0 ? EMPTY_DATA : DELTA.compute(clean, shrinkDirtyForPatch(clean, dirty));
+    public static Patch from(String obf, String srg, byte[] clean, byte[] dirty, boolean minimizePatch) throws IOException {
+        if (minimizePatch) {
+            dirty = shrinkDirtyForPatch(clean, dirty);
+        }
+        byte[] diff = dirty.length == 0 ? EMPTY_DATA : DELTA.compute(clean, dirty);
         int checksum = clean.length == 0 ? 0 : adlerHash(clean);
         return new Patch(obf, srg, clean.length != 0, checksum, diff);
     }
