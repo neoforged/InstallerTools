@@ -47,6 +47,7 @@ public class Generator {
     private final List<PatchSet> sets = new ArrayList<>();
     private boolean pack200 = false;
     private boolean legacy = false;
+    private boolean minimizePatches = false;
 
     public Generator(File output) {
         this.output = output;
@@ -82,6 +83,15 @@ public class Generator {
 
     public Generator legacy(boolean value) {
         this.legacy = value;
+        return this;
+    }
+
+    public Generator minimizePatches() {
+        return this.minimizePatches(true);
+    }
+
+    public Generator minimizePatches(boolean value) {
+        this.minimizePatches = value;
         return this;
     }
 
@@ -250,7 +260,7 @@ public class Generator {
         else
             log("  Processing " + srg + "(" + obf + ")");
 
-        Patch patch = Patch.from(obf, srg, clean, dirty);
+        Patch patch = Patch.from(obf, srg, clean, dirty, this.minimizePatches);
         log("    Clean: " + Integer.toHexString(patch.checksum(clean)) + " Dirty: " + Integer.toHexString(patch.checksum(dirty)));
         return patch.toBytes(this.legacy);
     }

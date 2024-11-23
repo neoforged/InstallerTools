@@ -27,6 +27,7 @@ public class ConsoleTool {
         OptionSpec<String> prefixO = parser.accepts("prefix").withRequiredArg();
         OptionSpec<Void> packO = parser.accepts("pack200");
         OptionSpec<Void> legacyO = parser.accepts("legacy", "Uses the legacy patch header format, also implies --pack200. NOT RECOMENDED.");
+        OptionSpec<Void> minimizeO = parser.accepts("minimize");
 
         // Create arguments
         OptionSpec<File> createO = parser.acceptsAll(Arrays.asList("dirty", "create")).withRequiredArg().ofType(File.class);
@@ -44,6 +45,7 @@ public class ConsoleTool {
             File output = options.valueOf(outputO).getAbsoluteFile();
             boolean legacy = options.has(legacyO);
             boolean pack200 = legacy || options.has(packO);
+            boolean minimizePatches = options.has(minimizeO);
 
             if (output.exists() && !output.delete())
                 err("Could not delete output file: " + output);
@@ -66,8 +68,9 @@ public class ConsoleTool {
                 log("  Output:  " + output);
                 log("  Pack200: " + pack200);
                 log("  Legacy:    " + legacy);
+                log("  Minimize patches: " + minimizePatches);
 
-                Generator gen = new Generator(output).pack200(pack200).legacy(legacy);
+                Generator gen = new Generator(output).pack200(pack200).legacy(legacy).minimizePatches(minimizePatches);
 
                 if (clean.size() > 1 || dirty.size() > 1 || prefixes.size() > 1) {
                     if (clean.size() != dirty.size() || dirty.size() != prefixes.size()) {
