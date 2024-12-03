@@ -129,7 +129,9 @@ public class SrgMcpRenamer extends Task {
                 Utils.copy(zin, zout);
             };
 
-            processors.add(new ZipEntryProcessor(ein -> ein.getName().startsWith("META-INF/jarjar/") && ein.getName().endsWith(".jar"),
+            // While FG put jij jars into META-INF/jarjar, archloom did put them into META-INF/jars
+            // So to catch more cases, we just remap all jars in META-INF/ or subdirectories thereof
+            processors.add(new ZipEntryProcessor(ein -> ein.getName().startsWith("META-INF/") && ein.getName().endsWith(".jar"),
                     (ein, zin, zout) -> this.processNestedJar(processors, defaultProcessor, ein, zin, zout)));
 
             ByteArrayOutputStream memory = input.equals(output) ? new ByteArrayOutputStream() : null;
