@@ -1,86 +1,88 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.neoforged.gradleutils.PomUtilsExtension.License
 
-plugins {
-  id 'org.cadixdev.licenser' version '0.6.1'
-  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
-  id 'net.neoforged.gradleutils' version '3.0.0-alpha.10' apply false
-}
-
-allprojects {
-    apply plugin: 'application'
-    apply plugin: 'maven-publish'
-    apply plugin: 'java-library'
-    apply plugin: 'net.neoforged.gradleutils'
-    if (project.name != 'cli-utils') {
-        apply plugin: 'com.github.johnrengelman.shadow'
-    }
-
-    group = 'net.neoforged.installertools'
-    java {
-        withJavadocJar()
-        withSourcesJar()
-        toolchain.languageVersion = JavaLanguageVersion.of(8)
-    }
-
+// Gradle repositories and dependencies
+buildscript {
     repositories {
+        gradlePluginPortal()
         mavenCentral()
     }
-
-    gradleutils.version {
-        branches.suffixBranch()
-    }
-
-    version = gradleutils.version
-    println("${project.name} version: " + version)
-
-    gradleutils.setupSigning(signAllPublications: true)
-
-    tasks.named('jar', Jar).configure {
-        manifest.attributes('Implementation-Version': project.version)
-        if (application.mainClass.getOrNull()) {
-            manifest.attributes('Main-Class': application.mainClass.get())
-        }
-    }
-
-    if (project.name != 'cli-utils') {
-        tasks.named('shadowJar', ShadowJar).configure {
-            archiveClassifier = 'fatjar'
-        }
+    dependencies {
+        classpath 'com.guardsquare:proguard-gradle:7.5.0'
     }
 }
+
+plugins {
+    id 'application'
+    id 'java'
+    id 'maven-publish'
+    id 'net.neoforged.licenser' version '0.7.5'
+    id 'net.neoforged.gradleutils' version '3.0.0'
+    id 'com.gradleup.shadow' version '8.3.4'
+}
+
+// Set up automatic versioning through gradleutils
+gradleutils {
+    version {
+        branches {
+            suffixBranch()
+        }
+    }
+    setupSigning(signAllPublications: true)
+}
+version = gradleutils.version
 
 gradleutils {
     setupSigning()
     setupCentralPublishing()
 }
 
-base {
-    archivesName = 'installertools'
+group = "net.neoforged.installertools"
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+    // The installertool project needs to be Java 8 compatible,
+    // since they have to be able to be run by the VM hosting the installer.
+    toolchain.languageVersion = JavaLanguageVersion.of(8)
 }
+
 application {
     mainClass = 'net.neoforged.installertools.ConsoleTool'
 }
 
 license {
-  header project.file('LICENSE-header.txt')
-  include 'net/neoforged/installertools/**/*.java'
-  newLine false
+    header project.file('LICENSE-header.txt')
+    include 'net/neoforged/installertools/**/*.java'
+    exclude 'net/neoforged/installertools/binarypatcher/**/*.java'
+    newLine false
+}
+
+repositories {
+    mavenCentral()
 }
 
 dependencies {
     implementation(libs.srgutils)
     implementation(libs.jopt)
+    implementation(libs.lzma)
+    implementation(libs.xdelta)
+    implementation(libs.asm)
+
     implementation 'com.google.code.gson:gson:2.8.9'
     implementation 'de.siegmar:fastcsv:2.0.0'
     implementation 'org.ow2.asm:asm-commons:9.3'
-    implementation project(':cli-utils')
 
     testImplementation(libs.bundles.junit)
 }
 
 test {
     useJUnitPlatform()
+}
+
+jar {
+    manifest {
+        attributes["Implementation-Version"] = version.toString()
+    }
 }
 
 publishing {
@@ -92,24 +94,36 @@ publishing {
             pom {
                 name = 'Installer Tools'
                 description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
+                pomUtils.githubRepo(it, 'InstallerTools')
+                pomUtils.license(it, License.LGPL_v2)
+                pomUtils.neoForgedDeveloper(it)
             }
         }
+    }
+    repositories {
+        maven gradleutils.publishingMaven
     }
 }
 
-allprojects {
-    publishing {
-        publications {
-            withType(MavenPublication).configureEach {
-                it.pom {
-                    pomUtils.githubRepo(it, 'InstallerTools')
-                    pomUtils.license(it, License.LGPL_v2)
-                    pomUtils.neoForgedDeveloper(it)
-                }
-            }
-        }
-        repositories {
-            maven gradleutils.publishingMaven
-        }
-    }
+File proguardFile = file("build/libs/${jar.archiveBaseName.get()}-proguard-${version}.jar")
+
+tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    configurations = [project.configurations.compileClasspath]
 }
+
+tasks.register('proguardJar', proguard.gradle.ProGuardTask) {
+    dependsOn shadowJar
+    outputs.upToDateWhen { false }
+
+    if (JavaLanguageVersion.current().asInt() <= 8) {
+        libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+    } else {
+        libraryjars "${System.getProperty('java.home')}/jmods"
+    }
+    libraryjars(configurations.compileClasspath)
+
+    injars shadowJar.archiveFile
+    outjars proguardFile
+    configuration file("proguard.conf")
+}
+assemble.dependsOn proguardJar
