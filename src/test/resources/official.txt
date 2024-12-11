@@ -1,0 +1,10 @@
+# This emulates the format used by mojang mappings
+pkg.CoolName -> a:
+# {"fileName":"CoolName.java","id":"sourceFile"}
+    float NOT_MENTIONED_FIELD -> a
+    9:10:void coolMethod(float,float) -> a
+    13:13:double noParams() -> b
+pkg.NotMentionedClass -> b:
+# {"fileName":"NotMentionedClass.java","id":"sourceFile"}
+    float NOT_MENTIONED_FIELD -> a
+    6:8:void notMentionedMethod() -> b

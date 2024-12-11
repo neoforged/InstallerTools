@@ -75,6 +75,12 @@ dependencies {
     implementation 'de.siegmar:fastcsv:2.0.0'
     implementation 'org.ow2.asm:asm-commons:9.3'
     implementation project(':cli-utils')
+
+    testImplementation(libs.bundles.junit)
+}
+
+test {
+    useJUnitPlatform()
 }
 
 publishing {
