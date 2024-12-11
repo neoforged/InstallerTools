@@ -3,13 +3,12 @@ package net.neoforged.installertools;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class AddParamsToOfficialMappingsTest {
+class MergeMappingsTest {
     @TempDir
     Path tempDir;
 
@@ -21,10 +20,11 @@ class AddParamsToOfficialMappingsTest {
         Path outputPath = tempDir.resolve("output.txt");
 
         // This is what NeoForm calls
-        new AddParamsToOfficialMappings().process(new String[]{
-                "--official",
+        new MergeMappings().process(new String[]{
+                "--base",
                 officialMappings.toAbsolutePath().toString(),
-                "--params",
+                "--reverse-base",
+                "--merge",
                 neoFormMappings.toAbsolutePath().toString(),
                 "--output",
                 outputPath.toString()
