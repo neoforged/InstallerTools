@@ -1,0 +1,10 @@
+tsrg2 left right
+a pkg/CoolName
+	a F NOT_MENTIONED_FIELD
+	a (FF)V coolMethod
+		0 o p_254025_
+		1 o p_254401_
+	b ()D noParams
+b pkg/NotMentionedClass
+	a F NOT_MENTIONED_FIELD
+	b ()V notMentionedMethod

@@ -18,42 +18,65 @@
  */
 package net.neoforged.installertools;
 
+import joptsimple.OptionException;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 import net.neoforged.srgutils.IMappingFile;
-import net.neoforged.srgutils.IRenamer;
-import net.neoforged.srgutils.IMappingFile.IClass;
-import net.neoforged.srgutils.IMappingFile.IField;
-import net.neoforged.srgutils.IMappingFile.IMethod;
-import net.neoforged.srgutils.IMappingFile.IPackage;
-import net.neoforged.srgutils.IMappingFile.IParameter;
 
-public class MergeMappings extends ChainMappings {
+import java.io.File;
+import java.io.IOException;
+
+public class MergeMappings extends Task {
     @Override
-    protected IRenamer makeRenamer(IMappingFile link, boolean classes, boolean fields, boolean methods, boolean params) {
-        return new IRenamer() {
-            public String rename(IPackage value) {
-                return link.remapPackage(value.getOriginal());
-            }
+    public void process(String[] args) throws IOException {
+        OptionParser parser = new OptionParser();
+        OptionSpec<File> base = parser.accepts("base").withRequiredArg().ofType(File.class).required();
+        OptionSpec<Void> reverseBase = parser.accepts("reverse-base");
+        OptionSpec<File> merge = parser.accepts("merge").withRequiredArg().ofType(File.class).required();
+        OptionSpec<Void> reverseMerge = parser.accepts("reverse-merge");
+        OptionSpec<File> output = parser.accepts("output").withRequiredArg().ofType(File.class).required();
+        OptionSpec<Void> reverseOutput = parser.accepts("reverse-output");
 
-            public String rename(IClass value) {
-                return classes ? link.remapClass(value.getOriginal()) : value.getMapped();
-            }
+        try {
+            OptionSet options = parser.parse(args);
 
-            public String rename(IField value) {
-                IClass cls = link.getClass(value.getParent().getOriginal());
-                return cls == null || !fields ? value.getMapped() : cls.remapField(value.getOriginal());
-            }
+            merge(
+                    options.valueOf(base),
+                    options.has(reverseBase),
+                    options.valueOf(merge),
+                    options.has(reverseMerge),
+                    options.valueOf(output),
+                    options.has(reverseOutput)
+            );
+        } catch (OptionException e) {
+            parser.printHelpOn(System.out);
+            error("Please provide correct parameters");
+        }
+    }
 
-            public String rename(IMethod value) {
-                IClass cls = link.getClass(value.getParent().getOriginal());
-                return cls == null || !methods ? value.getMapped() : cls.remapMethod(value.getOriginal(), value.getDescriptor());
-            }
+    private void merge(File baseFile, boolean reverseBase,
+                       File mergeFile, boolean reverseMerge,
+                       File outputFile, boolean reverseOutput) throws IOException {
+        log("Base Mappings: " + baseFile);
+        log("Reverse Base Mappings: " + reverseBase);
+        log("Merge Mappings: " + mergeFile);
+        log("Reverse Merge Mappings: " + reverseMerge);
+        log("Output: " + outputFile);
+        log("Reverse Output: " + reverseOutput);
 
-            public String rename(IParameter value) {
-                IMethod mtd = value.getParent();
-                IClass cls = link.getClass(mtd.getParent().getOriginal());
-                mtd = cls == null ? null : cls.getMethod(mtd.getOriginal(), mtd.getDescriptor());
-                return mtd == null || !params ? value.getMapped() : mtd.remapParameter(value.getIndex(), value.getMapped());
-            }
-        };
+        IMappingFile baseMappings = IMappingFile.load(baseFile);
+        if (reverseBase) {
+            baseMappings = baseMappings.reverse();
+        }
+        IMappingFile mergeMappings = IMappingFile.load(mergeFile);
+        if (reverseMerge) {
+            mergeMappings = mergeMappings.reverse();
+        }
+        IMappingFile outputMappings = baseMappings.merge(mergeMappings);
+        if (reverseOutput) {
+            outputMappings = outputMappings.reverse();
+        }
+        outputMappings.write(outputFile.toPath(), IMappingFile.Format.TSRG2, false);
     }
 }
