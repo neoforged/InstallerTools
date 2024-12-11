@@ -30,7 +30,7 @@ import java.io.IOException;
 /**
  * Takes a file containing the official Mojang mappings and adds mergers a TSRG mappings file into it with the purpose
  * of adding parameter names.
- * The result is written out as a TSRG file mapping obfuscated -> named.
+ * The result is written out as a TSRG file mapping obfuscated to named.
  */
 public class AddParamsToOfficialMappings extends Task {
     @Override
