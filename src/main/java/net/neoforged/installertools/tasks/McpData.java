@@ -32,13 +32,15 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import net.neoforged.installertools.cli.ConsoleTool;
 
 public class McpData extends Task {
+    public static final Gson GSON = new GsonBuilder().create();
 
     @SuppressWarnings("unchecked")
     @Override
@@ -75,7 +77,7 @@ public class McpData extends Task {
                     error("Input zip file invalid, missing 'config.json' entry");
 
                 try (InputStream cfgStream = zip.getInputStream(config)) {
-                    McpConfig cfg = ConsoleTool.GSON.fromJson(new InputStreamReader(zip.getInputStream(config)), McpConfig.class);
+                    McpConfig cfg = GSON.fromJson(new InputStreamReader(cfgStream), McpConfig.class);
                     if (cfg.data == null)
                         error("Invalid mcp config, missing data map");
 

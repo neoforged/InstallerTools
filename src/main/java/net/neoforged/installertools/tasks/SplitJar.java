@@ -44,14 +44,15 @@ import net.neoforged.installertools.cli.progress.ProgressManager;
 import net.neoforged.installertools.cli.progress.ProgressReporter;
 import net.neoforged.srgutils.IMappingFile;
 
-public class SplitJar {
+public class SplitJar extends Task {
     private static final OutputStream NULL_OUTPUT = new OutputStream() {
         @Override public void write(int b) {}
     };
     private static final boolean DEBUG = Boolean.getBoolean("net.neoforged.jarsplitter.debug");
     private static final ProgressManager PROGRESS = ProgressReporter.getDefault();
 
-    public static void main(String[] args) throws IOException {
+    @Override
+    public void process(String[] args) throws IOException {
         TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!
         OptionParser parser = new OptionParser();
         // Shared arguments
@@ -172,11 +173,11 @@ public class SplitJar {
         Files.write(cacheFile.toPath(), cache);
     }
 
-    private static File checkOutput(String name, File file, String inputSha, String srgSha) throws IOException {
+    private File checkOutput(String name, File file, String inputSha, String srgSha) throws IOException {
         return checkOutput(name, file, inputSha, srgSha, null);
     }
 
-    private static File checkOutput(String name, File file, String inputSha, String srgSha, String extra) throws IOException {
+    private File checkOutput(String name, File file, String inputSha, String srgSha, String extra) throws IOException {
         if (file == null) return null;
 
         file = file.getCanonicalFile();
@@ -202,11 +203,7 @@ public class SplitJar {
         return file;
     }
 
-    public static void log(String message) {
-        System.out.println(message);
-    }
-
-    public static void debug(String message) {
+    public void debug(String message) {
         if (DEBUG) {
             log(message);
         }

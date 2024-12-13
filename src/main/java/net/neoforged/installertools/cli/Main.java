@@ -28,9 +28,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.neoforged.installertools.tasks.Tasks;
 
-public class ConsoleTool {
-    public static final Gson GSON = new GsonBuilder().create();
-
+public class Main {
     public static void main(String[] args) throws IOException {
         Tasks task = null;
         String valid = Arrays.stream(Tasks.class.getEnumConstants()).map(Enum::name).collect(Collectors.joining(", "));

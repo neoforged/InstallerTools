@@ -18,31 +18,13 @@
  */
 package net.neoforged.installertools.tasks;
 
-import java.util.function.Supplier;
+import net.neoforged.installertools.binarypatcher.ConsoleTool;
 
-public enum Tasks {
-    MCP_DATA(McpData::new),
-    CREATE_DIR(CreateDirectory::new),
-    CREATE_PARENTS(CreateParents::new),
-    SRG_TO_MCP(SrgMcpRenamer::new),
-    EXTRACT_INHERITANCE(ExtractInheritance::new),
-    CHAIN_MAPPING(ChainMappings::new),
-    MERGE_MAPPING(MergeMappings::new),
-    DOWNLOAD_MOJMAPS(DownloadMojmaps::new),
-    EXTRACT_FILES(ExtractFiles::new),
-    BUNDLER_EXTRACT(BundlerExtract::new),
-    BINARY_PATCHER(BinaryPatcher::new),
-    SPLIT_JAR(SplitJar::new)
-    ;
+import java.io.IOException;
 
-    private Supplier<? extends Task> supplier;
-
-    private Tasks(Supplier<? extends Task> supplier) {
-        this.supplier = supplier;
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T extends Task> T get() {
-        return (T)supplier.get();
+public class BinaryPatcher extends Task {
+    @Override
+    public void process(String[] args) throws IOException {
+        ConsoleTool.main(args);
     }
 }
