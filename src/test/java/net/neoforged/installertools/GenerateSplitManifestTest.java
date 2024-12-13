@@ -100,7 +100,10 @@ class GenerateSplitManifestTest {
         assertThat(obfManifest.getMainAttributes())
                 .extracting(this::getEntries)
                 .asInstanceOf(InstanceOfAssertFactories.LIST)
-                .containsOnly("Manifest-Version: 1.0");
+                .containsOnly(
+                        "Manifest-Version: 1.0",
+                        "NeoForm-Minecraft-Dists: server client"
+                );
     }
 
     @Test
@@ -123,11 +126,11 @@ class GenerateSplitManifestTest {
                 e -> getEntries(e.getValue())
         )))
                 .containsOnly(
-                        MapEntry.entry("unobf/server_only.class", Arrays.asList("Minecraft-Dist: server")),
-                        MapEntry.entry("unobf/client_only.class", Arrays.asList("Minecraft-Dist: client")),
-                        MapEntry.entry("obf_client_only.class", Arrays.asList("Minecraft-Dist: client")),
-                        MapEntry.entry("obf_server_only.class", Arrays.asList("Minecraft-Dist: server")),
-                        MapEntry.entry("asset/some_asset.json", Arrays.asList("Minecraft-Dist: client"))
+                        MapEntry.entry("unobf/server_only.class", Arrays.asList("NeoForm-Minecraft-Dist: server")),
+                        MapEntry.entry("unobf/client_only.class", Arrays.asList("NeoForm-Minecraft-Dist: client")),
+                        MapEntry.entry("obf_client_only.class", Arrays.asList("NeoForm-Minecraft-Dist: client")),
+                        MapEntry.entry("obf_server_only.class", Arrays.asList("NeoForm-Minecraft-Dist: server")),
+                        MapEntry.entry("asset/some_asset.json", Arrays.asList("NeoForm-Minecraft-Dist: client"))
                 );
     }
 
@@ -151,11 +154,11 @@ class GenerateSplitManifestTest {
                 e -> getEntries(e.getValue())
         )))
                 .containsOnly(
-                        MapEntry.entry("unobf/server_only.class", Arrays.asList("Minecraft-Dist: server")),
-                        MapEntry.entry("unobf/client_only.class", Arrays.asList("Minecraft-Dist: client")),
-                        MapEntry.entry("pkg/NamedClientOnlyClass.class", Arrays.asList("Minecraft-Dist: client")),
-                        MapEntry.entry("pkg/NamedServerOnlyClass.class", Arrays.asList("Minecraft-Dist: server")),
-                        MapEntry.entry("asset/some_asset.json", Arrays.asList("Minecraft-Dist: client"))
+                        MapEntry.entry("unobf/server_only.class", Arrays.asList("NeoForm-Minecraft-Dist: server")),
+                        MapEntry.entry("unobf/client_only.class", Arrays.asList("NeoForm-Minecraft-Dist: client")),
+                        MapEntry.entry("pkg/NamedClientOnlyClass.class", Arrays.asList("NeoForm-Minecraft-Dist: client")),
+                        MapEntry.entry("pkg/NamedServerOnlyClass.class", Arrays.asList("NeoForm-Minecraft-Dist: server")),
+                        MapEntry.entry("asset/some_asset.json", Arrays.asList("NeoForm-Minecraft-Dist: client"))
                 );
     }
 

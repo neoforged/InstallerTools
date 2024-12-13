@@ -19,6 +19,11 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+/**
+ * Given the client and server jar, this task generates a Jar Manifest detailing for every file that was only
+ * present in one of the two jars, which jar it came from (using the "distribution" terminology).
+ * It also adds a top-level attribute ("NeoForm-Minecraft-Dists: server client")
+ */
 public class GenerateSplitManifest extends Task {
     @Override
     public void process(String[] args) throws IOException {
@@ -45,6 +50,7 @@ public class GenerateSplitManifest extends Task {
 
             Manifest manifest = new Manifest();
             manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            manifest.getMainAttributes().putValue("NeoForm-Minecraft-Dists", "server client");
 
             addSourceDistEntries(clientFiles, serverFiles, "client", mappings, manifest);
             addSourceDistEntries(serverFiles, clientFiles, "server", mappings, manifest);
@@ -63,7 +69,7 @@ public class GenerateSplitManifest extends Task {
         for (String file : distFiles) {
             if (!otherDistFiles.contains(file)) {
                 Attributes fileAttr = new Attributes(1);
-                fileAttr.putValue("Minecraft-Dist", dist);
+                fileAttr.putValue("NeoForm-Minecraft-Dist", dist);
 
                 if (mappings != null && file.endsWith(".class")) {
                     file = mappings.remapClass(file.substring(0, file.length() - ".class".length())) + ".class";
