@@ -16,27 +16,23 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.neoforged.installertools.util;
+package net.neoforged.installertools.tasks;
 
-import java.net.URL;
+import net.neoforged.installertools.cli.progress.ProgressReporter;
 
-public class ManifestJson {
-    public VersionInfo[] versions;
+import java.io.IOException;
 
-    public static class VersionInfo {
-        public String id;
-        public URL url;
+public abstract class Task {
+    protected static final ProgressReporter PROGRESS = ProgressReporter.getDefault();
+
+    public abstract void process(String[] args) throws IOException;
+
+    protected void error(String message) {
+        log(message);
+        throw new RuntimeException(message);
     }
 
-    public URL getUrl(String version) {
-        if (version == null) {
-            return null;
-        }
-        for (VersionInfo info : versions) {
-            if (version.equals(info.id)) {
-                return info.url;
-            }
-        }
-        return null;
+    protected void log(String message) {
+        System.out.println(message);
     }
 }

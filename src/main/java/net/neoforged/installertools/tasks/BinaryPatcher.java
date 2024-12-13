@@ -16,27 +16,15 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.neoforged.installertools.util;
+package net.neoforged.installertools.tasks;
 
-import java.net.URL;
+import net.neoforged.installertools.binarypatcher.ConsoleTool;
 
-public class ManifestJson {
-    public VersionInfo[] versions;
+import java.io.IOException;
 
-    public static class VersionInfo {
-        public String id;
-        public URL url;
-    }
-
-    public URL getUrl(String version) {
-        if (version == null) {
-            return null;
-        }
-        for (VersionInfo info : versions) {
-            if (version.equals(info.id)) {
-                return info.url;
-            }
-        }
-        return null;
+public class BinaryPatcher extends Task {
+    @Override
+    public void process(String[] args) throws IOException {
+        ConsoleTool.main(args);
     }
 }

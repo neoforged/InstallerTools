@@ -1,3 +1,18 @@
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            // Licenser
+            url = "https://maven.neoforged.net/releases/"
+        }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+}
+
 dependencyResolutionManagement {
     versionCatalogs {
         libs {
@@ -17,7 +32,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(':cli-utils')
-include(':jarsplitter')
-include(':binarypatcher')
-include(':zipinject')
+rootProject.name = 'installertools'

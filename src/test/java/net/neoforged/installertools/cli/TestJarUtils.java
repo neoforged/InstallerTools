@@ -16,27 +16,16 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-package net.neoforged.installertools.util;
+package net.neoforged.installertools.cli;
 
-import java.net.URL;
+import org.junit.jupiter.api.Test;
 
-public class ManifestJson {
-    public VersionInfo[] versions;
+import java.io.File;
 
-    public static class VersionInfo {
-        public String id;
-        public URL url;
-    }
+public class TestJarUtils {
 
-    public URL getUrl(String version) {
-        if (version == null) {
-            return null;
-        }
-        for (VersionInfo info : versions) {
-            if (version.equals(info.id)) {
-                return info.url;
-            }
-        }
-        return null;
+    @Test
+    void testCorrectCount() throws Exception {
+        assert JarUtils.getFileCountInZip(new File(getClass().getResource("/jarutils.zip").toURI())) == 3;
     }
 }
