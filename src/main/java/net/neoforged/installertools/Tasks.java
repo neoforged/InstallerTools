@@ -31,6 +31,7 @@ public enum Tasks {
     DOWNLOAD_MOJMAPS(DownloadMojmaps::new),
     EXTRACT_FILES(ExtractFiles::new),
     BUNDLER_EXTRACT(BundlerExtract::new),
+    GENERATE_SPLIT_MANIFEST(GenerateSplitManifest::new),
     ;
 
     private Supplier<? extends Task> supplier;
