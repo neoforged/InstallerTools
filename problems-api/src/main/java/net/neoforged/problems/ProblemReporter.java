@@ -12,15 +12,15 @@ public interface ProblemReporter {
     ProblemReporter NOOP = problem -> {
     };
 
-    default void report(ProblemId problemId, ProblemSeverity severity, ProblemLocation location, String message) {
-        report(new Problem(problemId, severity, location, message));
+    default void report(ProblemId problemId, ProblemSeverity severity, ProblemLocation location, String contextualLabel) {
+        report(Problem.builder(problemId).severity(severity).location(location).contextualLabel(contextualLabel).build());
     }
 
     /**
      * Reports a location independent problem.
      */
-    default void report(ProblemId problemId, ProblemSeverity severity, String message) {
-        report(problemId, severity, null, message);
+    default void report(ProblemId problemId, ProblemSeverity severity, String contextualLabel) {
+        report(Problem.builder(problemId).severity(severity).contextualLabel(contextualLabel).build());
     }
 
     void report(Problem problem);

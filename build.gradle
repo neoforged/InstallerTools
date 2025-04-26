@@ -12,7 +12,7 @@ allprojects {
     apply plugin: 'maven-publish'
     apply plugin: 'java-library'
     apply plugin: 'net.neoforged.gradleutils'
-    if (project.name != 'cli-utils') {
+    if (project.name != 'cli-utils' && project.name != 'problems-api') {
         apply plugin: 'com.github.johnrengelman.shadow'
     }
 
@@ -43,7 +43,7 @@ allprojects {
         }
     }
 
-    if (project.name != 'cli-utils') {
+    if (project.name != 'cli-utils' && project.name != 'problems-api') {
         tasks.named('shadowJar', ShadowJar).configure {
             archiveClassifier = 'fatjar'
         }
