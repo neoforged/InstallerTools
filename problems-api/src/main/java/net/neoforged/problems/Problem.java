@@ -5,6 +5,9 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.file.Path;
 import java.util.Objects;
 
+/**
+ * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/Problem.html
+ */
 public final class Problem {
     private final ProblemId problemId;
     private final ProblemSeverity severity;
@@ -104,6 +107,9 @@ public final class Problem {
         return new Builder(problem);
     }
 
+    /**
+     * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/ProblemSpec.html
+     */
     public static final class Builder {
         private final ProblemId problemId;
         private ProblemSeverity severity;

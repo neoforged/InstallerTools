@@ -7,6 +7,8 @@ import java.util.function.Predicate;
 
 /**
  * Report problems from plugins.
+ * <p>
+ * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/ProblemReporter.html
  */
 public interface ProblemReporter {
     ProblemReporter NOOP = problem -> {

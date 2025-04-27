@@ -4,6 +4,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
+/**
+ * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/ProblemGroup.html
+ */
 public final class ProblemGroup {
     private final String id;
 

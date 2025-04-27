@@ -7,6 +7,8 @@ import java.util.Objects;
 
 /**
  * Identifies the location of a problem in a file.
+ * <p>
+ * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/ProblemLocation.html
  */
 public final class ProblemLocation {
     private final Path file;

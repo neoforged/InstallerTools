@@ -2,6 +2,9 @@ package net.neoforged.problems;
 
 import java.util.Objects;
 
+/**
+ * Inspired by https://docs.gradle.org/8.14/javadoc/org/gradle/api/problems/ProblemId.html
+ */
 public final class ProblemId {
     private final String id;
 
