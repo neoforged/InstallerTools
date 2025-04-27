@@ -28,8 +28,13 @@ public final class ProblemLocation {
         if (column != null && column <= 0) {
             throw new IllegalArgumentException("Column for problem location must be 1 or higher: " + column);
         }
-        if (offset != null && offset < 0) {
-            throw new IllegalArgumentException("Byte-Offset for problem location must not be negative: " + offset);
+        if (offset != null) {
+            if (length == null) {
+                throw new IllegalArgumentException("When an offset is given, a length must also be given.");
+            }
+            if (offset < 0) {
+                throw new IllegalArgumentException("Byte-Offset for problem location must not be negative: " + offset);
+            }
         }
         if (length != null && length < 0) {
             throw new IllegalArgumentException("Length for problem location must not be negative: " + length);
@@ -69,13 +74,7 @@ public final class ProblemLocation {
 
     /**
      * @param offset 0-based byte offset into the file.
-     */
-    public static ProblemLocation ofOffsetInFile(Path file, int offset) {
-        return new ProblemLocation(file, null, null, offset, null);
-    }
-
-    /**
-     * @param offset 0-based byte offset into the file.
+     * @param length Number of bytes starting at {@code offset} that are relevant to the problem. May be 0.
      */
     public static ProblemLocation ofOffsetInFile(Path file, int offset, int length) {
         return new ProblemLocation(file, null, null, offset, length);
