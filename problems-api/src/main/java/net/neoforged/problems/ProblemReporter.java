@@ -26,6 +26,14 @@ public interface ProblemReporter {
     void report(Problem problem);
 
     /**
+     * Loads problems from the given report file (see {@link FileProblemReporter}) and add
+     * them to this reporter.
+     */
+    default void tryMergeFromFile(Path reportFile) throws IOException {
+        tryMergeFromFile(reportFile, problem -> true);
+    }
+
+    /**
      * Loads problems from the given report file (see {@link FileProblemReporter}) and add any that pass the given
      * filter to this reporter. If the given file is missing, nothing happens.
      */
