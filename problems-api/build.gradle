@@ -3,3 +3,13 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.8.9'
     compileOnly "org.jetbrains:annotations:26.0.1"
 }
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+        pom {
+            name = 'Problems API'
+            description = "API to emit problems using the Gradle Problems API data model"
+        }
+    }
+}
