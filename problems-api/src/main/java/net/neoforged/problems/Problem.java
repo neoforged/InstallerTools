@@ -82,6 +82,20 @@ public final class Problem {
         return Objects.hash(problemId, severity, location, contextualLabel, details, solution, documentedAt);
     }
 
+    @Override
+    public String toString() {
+        StringBuilder result = new StringBuilder();
+        result.append('[').append(severity).append("] ").append(problemId);
+        if (contextualLabel != null) {
+            result.append(": ").append(contextualLabel);
+        }
+        if (location != null) {
+            result.append(" @ ").append(location);
+        }
+
+        return result.toString();
+    }
+
     public static Builder builder(ProblemId id) {
         return new Builder(id);
     }
