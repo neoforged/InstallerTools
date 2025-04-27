@@ -86,6 +86,10 @@ public final class Problem {
         return new Builder(id);
     }
 
+    public static Builder builder(Problem problem) {
+        return new Builder(problem);
+    }
+
     public static final class Builder {
         private final ProblemId problemId;
         private ProblemSeverity severity;
@@ -102,6 +106,16 @@ public final class Problem {
         private Builder(ProblemId problemId) {
             this.problemId = problemId;
             this.severity = ProblemSeverity.WARNING;
+        }
+
+        private Builder(Problem problem) {
+            this.problemId = problem.problemId;
+            this.severity = problem.severity;
+            this.location = problem.location;
+            this.contextualLabel = problem.contextualLabel;
+            this.details = problem.details;
+            this.solution = problem.solution;
+            this.documentedAt = problem.documentedAt;
         }
 
         public Builder severity(ProblemSeverity severity) {
