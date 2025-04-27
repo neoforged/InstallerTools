@@ -5,6 +5,9 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.file.Path;
 import java.util.Objects;
 
+/**
+ * Identifies the location of a problem in a file.
+ */
 public final class ProblemLocation {
     private final Path file;
     @Nullable
@@ -17,8 +20,20 @@ public final class ProblemLocation {
     private final Integer length;
 
     private ProblemLocation(Path file, @Nullable Integer line, @Nullable Integer column,
-                           @Nullable Integer offset, @Nullable Integer length) {
-        this.file = file;
+                            @Nullable Integer offset, @Nullable Integer length) {
+        this.file = Objects.requireNonNull(file, "file");
+        if (line != null && line <= 0) {
+            throw new IllegalArgumentException("Line for problem location must be 1 or higher: " + line);
+        }
+        if (column != null && column <= 0) {
+            throw new IllegalArgumentException("Column for problem location must be 1 or higher: " + column);
+        }
+        if (offset != null && offset < 0) {
+            throw new IllegalArgumentException("Byte-Offset for problem location must not be negative: " + offset);
+        }
+        if (length != null && length < 0) {
+            throw new IllegalArgumentException("Length for problem location must not be negative: " + length);
+        }
         this.line = line;
         this.column = column;
         this.offset = offset;
@@ -66,25 +81,49 @@ public final class ProblemLocation {
         return new ProblemLocation(file, null, null, offset, length);
     }
 
+    /**
+     * Copies this location and replaces the file path found in the copy.
+     */
+    public ProblemLocation withFile(Path file) {
+        return new ProblemLocation(file, line, column, offset, length);
+    }
+
     public Path file() {
         return file;
     }
 
+    /**
+     * @return 1-based line offset into the {@link #file()}.
+     * <p>
+     * Mutually exclusive with {@link #offset()}.
+     */
     @Nullable
     public Integer line() {
         return line;
     }
 
+    /**
+     * @return 1-based character offset into the line specified by {@link #line()}.
+     */
     @Nullable
     public Integer column() {
         return column;
     }
 
+    /**
+     * 0-based byte-offset in {@link #file()}.
+     * <p>
+     * Mutually exclusive with {@link #line()} and {@link #column()}.
+     */
     @Nullable
     public Integer offset() {
         return offset;
     }
 
+    /**
+     * Optionally specifies the length in bytes (for {@link #offset()}) or
+     * characters (for {@link #column()}) of the problems' location.
+     */
     @Nullable
     public Integer length() {
         return length;
