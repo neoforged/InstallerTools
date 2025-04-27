@@ -198,13 +198,6 @@ public final class Problem {
         /**
          * @param offset 0-based byte offset into the file.
          */
-        public Builder inFileAtOffset(Path file, int offset) {
-            return location(ProblemLocation.ofOffsetInFile(file, offset));
-        }
-
-        /**
-         * @param offset 0-based byte offset into the file.
-         */
         public Builder inFileAtOffset(Path file, int offset, int length) {
             return location(ProblemLocation.ofOffsetInFile(file, offset, length));
         }
