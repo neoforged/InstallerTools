@@ -148,12 +148,25 @@ public final class ProblemLocation {
 
     @Override
     public String toString() {
-        return "ProblemLocation[" +
-                "file=" + file + ", " +
-                "line=" + line + ", " +
-                "column=" + column + ", " +
-                "offset=" + offset + ", " +
-                "length=" + length + ']';
+        StringBuilder result = new StringBuilder();
+        result.append(file);
+
+        if (line != null) {
+            result.append(':').append(line);
+            if (column != null) {
+                result.append(':').append(column);
+                if (length != null) {
+                    result.append('-').append(column + length);
+                }
+            }
+        } else if (offset != null) {
+            result.append(':').append(offset).append('b');
+            if (length != null) {
+                result.append('-').append(offset + length).append('b');
+            }
+        }
+
+        return result.toString();
     }
 
 }
