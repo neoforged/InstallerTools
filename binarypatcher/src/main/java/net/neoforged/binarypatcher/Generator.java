@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -41,7 +42,7 @@ public class Generator {
 
     private final Map<String, String> o2m = new HashMap<>();
     private final Map<String, String> m2o = new HashMap<>();
-    private final Set<String> patches = new TreeSet<>();
+    private final Set<String> includedClasses = new TreeSet<>();
 
     private final File output;
     private final List<PatchSet> sets = new ArrayList<>();
@@ -108,8 +109,22 @@ public class Generator {
         int suffix = ".java.patch".length();
         Files.walk(root.toPath()).filter(Files::isRegularFile).map(p -> p.toAbsolutePath().toString()).filter(p -> p.endsWith(".java.patch")).forEach(path -> {
             String relative = path.substring(base+1).replace('\\', '/');
-            patches.add(relative.substring(0, relative.length() - suffix));
+            includedClasses.add(relative.substring(0, relative.length() - suffix));
         });
+    }
+    
+    public void loadIncludeClasses(File archive) throws IOException {
+        try (ZipFile zip = new ZipFile(archive)) {
+            Enumeration<? extends ZipEntry> entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = entry.getName();
+                if (!entry.isDirectory() && name.endsWith(".class") && !name.contains("$")) {
+                    String className = name.substring(0, name.length() - ".class".length());
+                    includedClasses.add(className);
+                }
+            }
+        }
     }
 
     public void create() throws IOException {
@@ -155,26 +170,42 @@ public class Generator {
             log("Creating patches:");
             log("  Clean: " + clean);
             log("  Dirty: " + dirty);
-            if (patches.isEmpty()) { //No patches, assume full set!
-                for (String cls : entries.keySet()) {
-                   String srg = m2o.getOrDefault(cls, cls);
-                    byte[] cleanData = getData(zclean, cls);
-                    byte[] dirtyData = getData(zdirty, cls);
-                    if (!Arrays.equals(cleanData, dirtyData)) {
-                        byte[] patch = process(cls, srg, cleanData, dirtyData);
-                        if (patch != null)
-                            binpatches.put(toJarName(srg), patch);
+            if (includedClasses.isEmpty()) { //No patches, assume full set!
+                for (Map.Entry<String, Set<String>> entry : entries.entrySet()) {
+                    String path = entry.getKey();
+                    String srgRoot = m2o.getOrDefault(path, path);
+                    for (String cls : entry.getValue()) {
+                        String srg = m2o.get(cls);
+                        if (srg == null) {
+                            int idx = cls.indexOf('$');
+                            if (idx == -1) {
+                                srg = path;
+                            } else {
+                                srg = srgRoot + '$' + cls.substring(idx + 1);
+                            }
+                        }
+                        byte[] cleanData = getData(zclean, cls);
+                        byte[] dirtyData = getData(zdirty, cls);
+                        if (!Arrays.equals(cleanData, dirtyData)) {
+                            byte[] patch = process(cls, srg, cleanData, dirtyData);
+                            if (patch != null)
+                                binpatches.put(toJarName(srg), patch);
+                        }
                     }
                 }
             } else {
-                for (String path : patches) {
+                for (String path : includedClasses) {
                     String obf = o2m.getOrDefault(path, path);
                     if (entries.containsKey(obf)) {
                         for (String cls : entries.get(obf)) {
                             String srg = m2o.get(cls);
                             if (srg == null) {
                                 int idx = cls.indexOf('$');
-                                srg = path + '$' + cls.substring(idx + 1);
+                                if (idx == -1) {
+                                    srg = path;
+                                } else {
+                                    srg = path + '$' + cls.substring(idx + 1);
+                                }
                             }
 
                             byte[] cleanData = getData(zclean, cls);

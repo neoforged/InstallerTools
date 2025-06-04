@@ -31,7 +31,8 @@ public class ConsoleTool {
 
         // Create arguments
         OptionSpec<File> createO = parser.acceptsAll(Arrays.asList("dirty", "create")).withRequiredArg().ofType(File.class);
-        OptionSpec<File> patchesO = parser.accepts("patches").withRequiredArg().ofType(File.class);
+        OptionSpec<File> patchesO = parser.accepts("patches", "Source patch files; binpatches will include classes matching source patched classes or their inner classes.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> includeClassesO = parser.accepts("include-classes", "Source jars determining classes (and matching inner classes) to include, in addition to those specified by --patches.").withRequiredArg().ofType(File.class);
         OptionSpec<File> srgO = parser.accepts("srg").withRequiredArg().ofType(File.class);
 
         // Apply arguments
@@ -110,6 +111,13 @@ public class ConsoleTool {
                         gen.loadPatches(dir);
                     }
                 }
+                
+                if (options.has(includeClassesO)) {
+                    for (File file : options.valuesOf(includeClassesO)) {
+                        log("  Include Classes: " + file);
+                        gen.loadIncludeClasses(file);
+                    }
+                }
 
                 if (options.has(srgO)) {
                     for (File file : options.valuesOf(srgO)) {
@@ -122,8 +130,9 @@ public class ConsoleTool {
             } else if (options.has(applyO)) {
                 File clean_jar = options.valueOf(cleanO);
 
-                if (options.has(srgO))     err("Connot specify --apply and --srg at the same time!");
-                if (options.has(patchesO)) err("Connot specify --apply and --patches at the same time!");
+                if (options.has(srgO))            err("Connot specify --apply and --srg at the same time!");
+                if (options.has(patchesO))        err("Connot specify --apply and --patches at the same time!");
+                if (options.has(includeClassesO)) err("Connot specify --apply and --include-classes at the same time!");
 
                 Patcher patcher = new Patcher(clean_jar, output)
                     .keepData(options.has(dataO))
