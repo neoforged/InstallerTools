@@ -17,9 +17,9 @@ application {
 }
 
 license {
-    header project.file('LICENSE-header.txt')
-    include 'net/neoforged/installertools/**/*.java'
-    newLine false
+  header project.file('LICENSE-header.txt')
+  include 'net/neoforged/installertools/**/*.java'
+  newLine false
 }
 
 dependencies {
