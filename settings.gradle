@@ -9,6 +9,7 @@ pluginManagement {
     }
     repositories {
         gradlePluginPortal()
+        // Required for licenser
         maven {
             name = 'NeoForged'
             url = 'https://maven.neoforged.net/releases/'
