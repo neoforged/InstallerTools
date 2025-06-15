@@ -1,6 +1,3 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import net.neoforged.gradleutils.PomUtilsExtension.License
-
 plugins {
   id 'net.neoforged.licenser'
   id 'com.gradleup.shadow' apply false
@@ -15,9 +12,6 @@ gradleutils {
     setupCentralPublishing()
 }
 
-base {
-    archivesName = 'installertools'
-}
 application {
     mainClass = 'net.neoforged.installertools.ConsoleTool'
 }
@@ -44,32 +38,12 @@ test {
 }
 
 publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifactId = base.archivesName.get()
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
 
-            pom {
-                name = 'Installer Tools'
-                description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
-            }
-        }
-    }
-}
-
-allprojects {
-    publishing {
-        publications {
-            withType(MavenPublication).configureEach {
-                it.pom {
-                    pomUtils.githubRepo(it, 'InstallerTools')
-                    pomUtils.license(it, License.LGPL_v2)
-                    pomUtils.neoForgedDeveloper(it)
-                }
-            }
-        }
-        repositories {
-            maven gradleutils.publishingMaven
+        pom {
+            name = 'Installer Tools'
+            description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
         }
     }
 }

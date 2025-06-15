@@ -57,3 +57,5 @@ include(':jarsplitter')
 include(':binarypatcher')
 include(':zipinject')
 include(':problems-api')
+
+rootProject.name = 'installertools'
