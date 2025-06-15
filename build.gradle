@@ -1,11 +1,11 @@
 plugins {
-    id 'net.neoforged.licenser'
-    id 'com.gradleup.shadow' apply false
-    id 'net.neoforged.gradleutils' apply false
+  id 'net.neoforged.licenser'
+  id 'com.gradleup.shadow' apply false
+  id 'net.neoforged.gradleutils' apply false
 }
 
-apply plugin: ProjectDefaultsPlugin
-apply plugin: CliToolPlugin
+apply plugin : ProjectDefaultsPlugin
+apply plugin : CliToolPlugin
 
 gradleutils {
     setupSigning()
