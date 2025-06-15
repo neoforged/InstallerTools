@@ -33,6 +33,10 @@ directly.
 | problems-api  | Shared API used by various tools throughout our ecosystem to encode reports about warnings and errors as JSON files.                                     |
 | zipinject     | Injects static content into ZIP files.                                                                                                                   |
 
+## Java Version
+
+All tools in this project are compatible with Java 8, since that is the minimum version supported by the installer.
+
 ## Download
 
 End-users do not have to use these tools directly, they're automatically downloaded during the installation.
