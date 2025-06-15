@@ -1,5 +1,3 @@
-import net.neoforged.gradleutils.PomUtilsExtension.License
-
 plugins {
     id 'net.neoforged.licenser'
     id 'com.gradleup.shadow' apply false
@@ -11,7 +9,7 @@ apply plugin: CliToolPlugin
 
 gradleutils {
     setupSigning()
-    setupCentralPublishing()
+//    setupCentralPublishing()
 }
 
 base {
@@ -50,18 +48,6 @@ publishing {
         pom {
             name = 'Installer Tools'
             description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
-        }
-    }
-}
-
-publishing {
-    publications {
-        withType(MavenPublication).configureEach {
-            it.pom {
-                pomUtils.githubRepo(it, 'InstallerTools')
-                pomUtils.license(it, License.LGPL_v2)
-                pomUtils.neoForgedDeveloper(it)
-            }
         }
     }
 }
