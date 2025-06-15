@@ -1,10 +1,11 @@
 /.gradle/
+/buildSrc/.gradle/
 /.idea/
 build/
 /repo/
 /.settings/
-/bin/
-/out/
+bin/
+out/
 .classpath
 .project
 *.lzma

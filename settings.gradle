@@ -1,11 +1,34 @@
+import org.gradle.api.initialization.resolve.RepositoriesMode
+import org.gradle.api.initialization.resolve.RulesMode
+
+pluginManagement {
+    plugins {
+        id 'net.neoforged.licenser' version '0.7.5'
+        id 'com.gradleup.shadow' version '8.3.6'
+        id 'net.neoforged.gradleutils' version '4.1.0'
+    }
+    repositories {
+        gradlePluginPortal()
+        // Required for licenser
+        maven {
+            name = 'NeoForged'
+            url = 'https://maven.neoforged.net/releases/'
+        }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 dependencyResolutionManagement {
     versionCatalogs {
         libs {
-            version('junit', '5.10.0')
+            version('junit', '5.13.1')
             library('junit-api', 'org.junit.jupiter', 'junit-jupiter-api').versionRef('junit')
             library('junit-engine', 'org.junit.jupiter', 'junit-jupiter-engine').versionRef('junit')
-            library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.10.0')
-            library('assert4j', 'org.assertj:assertj-core:3.25.1')
+            library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.13.1')
+            library('assert4j', 'org.assertj:assertj-core:3.27.3')
             bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'assert4j'])
 
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
@@ -14,7 +37,18 @@ dependencyResolutionManagement {
             library('xdelta', 'com.nothome:javaxdelta:2.0.1')
             library('asm', 'org.ow2.asm:asm:9.7')
             library('asm-commons', 'org.ow2.asm:asm-commons:9.7')
+            library('gson', 'com.google.code.gson:gson:2.8.9')
+            library('fastcsv', 'de.siegmar:fastcsv:2.0.0')
+            library('jetbrains-annotations', 'org.jetbrains:annotations:26.0.1')
         }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
+    rulesMode = RulesMode.FAIL_ON_PROJECT_RULES
+    repositories {
+        mavenCentral()
     }
 }
 

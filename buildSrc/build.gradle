@@ -1,0 +1,7 @@
+dependencies {
+    implementation 'net.neoforged.gradleutils:net.neoforged.gradleutils.gradle.plugin:4.1.0'
+}
+
+repositories {
+    gradlePluginPortal()
+}
