@@ -1,3 +1,6 @@
+
+apply plugin : ProjectDefaultsPlugin
+
 dependencies {
     testImplementation(libs.bundles.junit)
 }

@@ -1,4 +1,10 @@
-evaluationDependsOn(':cli-utils')
+
+apply plugin : ProjectDefaultsPlugin
+apply plugin : CliToolPlugin
+
+application {
+    mainClass = 'net.neoforged.jarsplitter.ConsoleTool'
+}
 
 dependencies {
     implementation(libs.jopt)
@@ -6,15 +12,9 @@ dependencies {
     implementation project(':cli-utils')
 }
 
-application {
-    mainClass = 'net.neoforged.jarsplitter.ConsoleTool'
-}
-
 publishing {
     publications.register('mavenJava', MavenPublication) {
         from components.java
-
-        artifactId = 'jarsplitter'
 
         pom {
             name = 'Jar Splitter'

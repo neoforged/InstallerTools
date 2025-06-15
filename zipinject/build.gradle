@@ -1,10 +1,14 @@
-dependencies {
-    implementation(libs.jopt)
-    testImplementation(libs.bundles.junit)
-}
+
+apply plugin : ProjectDefaultsPlugin
+apply plugin : CliToolPlugin
 
 application {
     mainClass = 'net.neoforged.zipinject.ConsoleTool'
+}
+
+dependencies {
+    implementation(libs.jopt)
+    testImplementation(libs.bundles.junit)
 }
 
 test {
@@ -14,8 +18,6 @@ test {
 publishing {
     publications.register('mavenJava', MavenPublication) {
         from components.java
-
-        artifactId = 'zipinject'
 
         pom {
             name = 'Zip Inject'

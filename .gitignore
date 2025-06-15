@@ -3,8 +3,8 @@
 build/
 /repo/
 /.settings/
-/bin/
-/out/
+bin/
+out/
 .classpath
 .project
 *.lzma
