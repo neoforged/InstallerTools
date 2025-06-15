@@ -1,5 +1,5 @@
 dependencies {
-    implementation 'net.neoforged.gradleutils:net.neoforged.gradleutils.gradle.plugin:4.1.0'
+    implementation 'net.neoforged.gradleutils:net.neoforged.gradleutils.gradle.plugin:5.0.0'
 }
 
 repositories {

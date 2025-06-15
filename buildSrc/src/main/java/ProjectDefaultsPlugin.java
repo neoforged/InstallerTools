@@ -2,6 +2,7 @@ import net.neoforged.gradleutils.GradleUtilsExtension;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.publish.PublishingExtension;
 import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.jvm.toolchain.JavaLanguageVersion;
 
@@ -37,5 +38,9 @@ public class ProjectDefaultsPlugin implements Plugin<Project> {
             var manifest = task.getManifest();
             manifest.attributes(Map.of("Implementation-Version", projectVersion.toString()));
         });
+
+        // Setup publishing repositories
+        var publications = project.getExtensions().getByType(PublishingExtension.class);
+        publications.getRepositories().maven(gradleUtilsExtension.getPublishingMaven());
     }
 }
