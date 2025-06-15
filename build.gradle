@@ -12,10 +12,6 @@ gradleutils {
     setupCentralPublishing()
 }
 
-base {
-    archivesName = 'installertools'
-}
-
 application {
     mainClass = 'net.neoforged.installertools.ConsoleTool'
 }
