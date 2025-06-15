@@ -9,7 +9,7 @@ apply plugin: CliToolPlugin
 
 gradleutils {
     setupSigning()
-//    setupCentralPublishing()
+    setupCentralPublishing()
 }
 
 base {
