@@ -33,8 +33,9 @@ import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import lzma.streams.LzmaOutputStream;
 import net.neoforged.srgutils.IMappingFile;
+import org.tukaani.xz.LZMA2Options;
+import org.tukaani.xz.LZMAOutputStream;
 
 public class Generator {
     public static final String EXTENSION = ".lzma";
@@ -232,7 +233,7 @@ public class Generator {
 
     private byte[] getData(ZipFile zip, String cls) throws IOException {
         ZipEntry entry = zip.getEntry(cls + ".class");
-        return entry == null ? EMPTY_DATA : Util.toByteArray(zip.getInputStream(entry));
+        return entry == null ? EMPTY_DATA : Util.toByteArray(zip, entry);
     }
     // public for testing
     public byte[] createJar(Map<String, byte[]> patches) throws IOException {
@@ -277,7 +278,8 @@ public class Generator {
     // public for testing
     public byte[] lzma(byte[] data) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try (LzmaOutputStream lzma = new LzmaOutputStream.Builder(out).useEndMarkerMode(true).build()) {
+        LZMA2Options options = new LZMA2Options();
+        try (OutputStream lzma = new LZMAOutputStream(out, options, data.length)) {
             lzma.write(data);
         }
         byte[] ret = out.toByteArray();

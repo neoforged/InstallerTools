@@ -9,7 +9,7 @@ application {
 dependencies {
     implementation(libs.srgutils)
     implementation(libs.jopt)
-    implementation(libs.lzma)
+    implementation(libs.xz)
     implementation(libs.xdelta)
     implementation(libs.asm)
     implementation(project(':cli-utils'))
