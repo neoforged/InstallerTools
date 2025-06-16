@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
-            library('lzma', 'com.github.jponge:lzma-java:1.3')
+            library('xz', 'org.tukaani:xz:1.10')
             library('xdelta', 'com.nothome:javaxdelta:2.0.1')
             library('asm', 'org.ow2.asm:asm:9.7')
             library('asm-commons', 'org.ow2.asm:asm-commons:9.7')

@@ -4,6 +4,8 @@
  */
 package net.neoforged.binarypatcher;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -12,6 +14,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,15 +27,13 @@ import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Pack200;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import com.nothome.delta.GDiffPatcher;
 
-import lzma.sdk.lzma.Decoder;
-import lzma.streams.LzmaInputStream;
-import net.neoforged.cliutils.JarUtils;
 import net.neoforged.cliutils.progress.ProgressReporter;
+import org.tukaani.xz.LZMAInputStream;
 
 public class Patcher {
     public static final String EXTENSION = ".lzma";
@@ -40,7 +41,7 @@ public class Patcher {
     private static final GDiffPatcher PATCHER = new GDiffPatcher();
     private static final ProgressReporter PROGRESS = ProgressReporter.getDefault();
 
-    private Map<String, List<Patch>> patches = new TreeMap<>();
+    private final Map<String, List<Patch>> patches = new TreeMap<>();
 
     private final File clean;
     private final File output;
@@ -89,7 +90,7 @@ public class Patcher {
         PROGRESS.setStep("Loading patch files");
 
         try (InputStream input = new FileInputStream(file)) {
-            InputStream stream = new LzmaInputStream(input, new Decoder());
+            InputStream stream = new LZMAInputStream(new BufferedInputStream(input));
 
             if (pack200) {
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -99,7 +100,7 @@ public class Patcher {
                 stream = new ByteArrayInputStream(bos.toByteArray());
             }
 
-            JarInputStream jar = new JarInputStream(stream);
+            JarInputStream jar = new JarInputStream(new BufferedInputStream(stream));
 
             JarEntry entry;
             while ((entry = jar.getNextJarEntry()) != null) {
@@ -120,38 +121,41 @@ public class Patcher {
             throw new IOException("Failed to delete existing output file: " + output);
 
         PROGRESS.setStep("Patching input");
-        PROGRESS.setMaxProgress(JarUtils.getFileCountInZip(clean));
-        try (ZipInputStream zclean = new ZipInputStream(new FileInputStream(clean));
-             ZipOutputStream zpatched = new ZipOutputStream(new FileOutputStream(output))) {
+        try (ZipFile zclean = new ZipFile(clean);
+             ZipOutputStream zpatched = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(output)))) {
+            PROGRESS.setMaxProgress(zclean.size());
 
             Set<String> processed = new HashSet<>();
-            ZipEntry entry;
             int amount = 0;
-            while ((entry = zclean.getNextEntry()) != null) {
+            Enumeration<? extends ZipEntry> zcleanEntries = zclean.entries();
+            while (zcleanEntries.hasMoreElements()) {
+                ZipEntry entry = zcleanEntries.nextElement();
                 if (entry.getName().endsWith(".class")) {
                     String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
-                    List<Patch> patchlist  = patches.get(key);
+                    List<Patch> patchlist = patches.get(key);
                     if (patchlist != null) {
                         processed.add(key);
-                        byte[] data = Util.toByteArray(zclean);
+                        byte[] data = Util.toByteArray(zclean, entry);
                         for (int x = 0; x < patchlist.size(); x++) {
                             Patch patch = patchlist.get(x);
-                            debug("  Patching " + patch.getName() + " " + (x+1) + "/" + patchlist.size());
+                            debug("  Patching " + patch.getName() + " " + (x + 1) + "/" + patchlist.size());
                             data = patch(data, patch);
                         }
                         if (data.length != 0) {
-                            zpatched.putNextEntry(getNewEntry(entry.getName()));
+                            ZipEntry newEntry = getNewEntry(entry.getName());
+                            newEntry.setSize(data.length);
+                            zpatched.putNextEntry(newEntry);
                             zpatched.write(data);
                         }
                     } else if (!patchedOnly) {
                         debug("  Copying " + entry.getName());
                         zpatched.putNextEntry(getNewEntry(entry.getName()));
-                        Util.copy(zclean, zpatched);
+                        Util.copy(zclean, entry, zpatched);
                     }
                 } else if (keepData) {
                     debug("  Copying " + entry.getName());
                     zpatched.putNextEntry(getNewEntry(entry.getName()));
-                    Util.copy(zclean, zpatched);
+                    Util.copy(zclean, entry, zpatched);
                 }
 
                 // Do updates in batches of 10 to avoid spam
@@ -172,17 +176,19 @@ public class Patcher {
                 byte[] data = new byte[0];
                 for (int x = 0; x < patchlist.size(); x++) {
                     Patch patch = patchlist.get(x);
-                    debug("  Patching " + patch.getName() + " " + (x+1) + "/" + patchlist.size());
+                    debug("  Patching " + patch.getName() + " " + (x + 1) + "/" + patchlist.size());
                     data = patch(data, patch);
                 }
                 if (data.length != 0) {
-                    zpatched.putNextEntry(getNewEntry(key + ".class"));
+                    ZipEntry newEntry = getNewEntry(key + ".class");
+                    newEntry.setSize(data.length);
+                    zpatched.putNextEntry(newEntry);
                     zpatched.write(data);
                 }
             }
 
             PROGRESS.setProgress(amount);
-         }
+        }
     }
 
     private byte[] patch(byte[] data, Patch patch) throws IOException {
@@ -220,8 +226,8 @@ public class Patcher {
     // Public for testing
     public Map<String, List<Patch>> getPatches() {
         Map<String, List<Patch>> ret = new HashMap<>();
-        patches.forEach((k,v) ->
-            ret.computeIfAbsent(k, a -> new ArrayList<>()).addAll(v)
+        patches.forEach((k, v) ->
+                ret.computeIfAbsent(k, a -> new ArrayList<>()).addAll(v)
         );
         return ret;
     }

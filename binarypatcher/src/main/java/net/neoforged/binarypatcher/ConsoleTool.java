@@ -134,6 +134,8 @@ public class ConsoleTool {
                 if (options.has(patchesO))        err("Connot specify --apply and --patches at the same time!");
                 if (options.has(includeClassesO)) err("Connot specify --apply and --include-classes at the same time!");
 
+                long start = System.currentTimeMillis();
+
                 Patcher patcher = new Patcher(clean_jar, output)
                     .keepData(options.has(dataO))
                     .includeUnpatched(options.has(unpatchedO))
@@ -154,10 +156,14 @@ public class ConsoleTool {
                 if (!prefixes.isEmpty() && patches.size() != prefixes.size())
                     err("Patches and prefixes arguments must be paird if they are used together. Use NULL to specify an empty prefix.");
 
+                long startLoadingPatches = System.currentTimeMillis();
                 for (int x = 0; x < patches.size(); x++)
                     patcher.loadPatches(patches.get(x), x >= prefixes.size() || "NULL".equals(prefixes.get(x)) ? null : prefixes.get(x));
+                debug("Loaded patches in " + (System.currentTimeMillis() - startLoadingPatches) + "ms");
 
                 patcher.process();
+
+                debug("Completed in " + (System.currentTimeMillis() - start) + "ms");
 
             } else {
                 parser.printHelpOn(System.out);
@@ -170,6 +176,11 @@ public class ConsoleTool {
 
     public static void log(String message) {
         System.out.println(message);
+    }
+    public static void debug(String message) {
+        if (DEBUG) {
+            log(message);
+        }
     }
     public static void err(String message) {
         System.out.println(message);
