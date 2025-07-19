@@ -1,5 +1,7 @@
 dependencies {
     implementation 'net.neoforged.gradleutils:net.neoforged.gradleutils.gradle.plugin:5.0.0'
+    implementation 'org.ow2.asm:asm:9.7'
+    implementation 'org.ow2.asm:asm-commons:9.7'
 }
 
 repositories {

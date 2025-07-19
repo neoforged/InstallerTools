@@ -9,6 +9,7 @@ application {
 dependencies {
     implementation(libs.jopt)
     implementation(libs.srgutils)
+    implementation(project(path: ":ziptransform", configuration: "proguard"))
     implementation project(':cli-utils')
 }
 

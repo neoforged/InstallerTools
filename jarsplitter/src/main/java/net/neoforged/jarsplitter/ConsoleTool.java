@@ -5,21 +5,17 @@
 package net.neoforged.jarsplitter;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
 
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
@@ -28,12 +24,12 @@ import joptsimple.OptionSpec;
 import net.neoforged.cliutils.JarUtils;
 import net.neoforged.cliutils.progress.ProgressManager;
 import net.neoforged.cliutils.progress.ProgressReporter;
+import net.neoforged.jartransform.ZipInput;
+import net.neoforged.jartransform.ZipOutput;
+import net.neoforged.jartransform.ZipTransformEntry;
 import net.neoforged.srgutils.IMappingFile;
 
 public class ConsoleTool {
-    private static final OutputStream NULL_OUTPUT = new OutputStream() {
-        @Override public void write(int b) {}
-    };
     private static final boolean DEBUG = Boolean.getBoolean("net.neoforged.jarsplitter.debug");
     private static final ProgressManager PROGRESS = ProgressReporter.getDefault();
 
@@ -51,8 +47,8 @@ public class ConsoleTool {
             OptionSet options = parser.parse(args);
 
             File input = options.valueOf(inputO);
-            File slim  = options.valueOf(slimO);
-            File data  = options.has(dataO) ? options.valueOf(dataO) : null;
+            File slim = options.valueOf(slimO);
+            File data = options.has(dataO) ? options.valueOf(dataO) : null;
             File extra = options.has(extraO) ? options.valueOf(extraO) : null;
             boolean merge = data == null;
 
@@ -67,7 +63,7 @@ public class ConsoleTool {
             Set<String> whitelist = new HashSet<>();
 
             if (options.has(srgO)) {
-                for(File dir : options.valuesOf(srgO)) {
+                for (File dir : options.valuesOf(srgO)) {
                     log("  SRG:   " + dir);
                     IMappingFile srg = IMappingFile.load(dir);
                     srg.getClasses().forEach(c -> whitelist.add(c.getOriginal()));
@@ -82,7 +78,8 @@ public class ConsoleTool {
             slim = checkOutput("Slim", slim, inputSha, srgSha);
             data = checkOutput("Data", data, inputSha, srgSha);
             if (extra != null) {
-                if (whitelist.isEmpty()) throw new IllegalArgumentException("--extra argument specified with no --srg class list");
+                if (whitelist.isEmpty())
+                    throw new IllegalArgumentException("--extra argument specified with no --srg class list");
                 extra = checkOutput("Extra", extra, inputSha, srgSha, merge ? "\nMerge: true" : null);
             } else if (merge) {
                 throw new IllegalArgumentException("You must specify --extra if you do not specify --data");
@@ -98,33 +95,34 @@ public class ConsoleTool {
             log("Splitting " + fileAmount + " files:");
 
             int amount = 0;
-            try (ZipInputStream zinput = new ZipInputStream(Files.newInputStream(input.toPath()));
-                 ZipOutputStream zslim = new ZipOutputStream(slim == null ? NULL_OUTPUT : new FileOutputStream(slim));
-                 ZipOutputStream zdata = new ZipOutputStream(data == null ? NULL_OUTPUT : new FileOutputStream(data));
-                 ZipOutputStream zextra = new ZipOutputStream(extra == null ? NULL_OUTPUT : new FileOutputStream(extra))) {
+            try (ZipInput zinput = new ZipInput(input);
+                 ZipOutput zslim = slim != null ? new ZipOutput(slim) : null;
+                 ZipOutput zdata = data != null ? new ZipOutput(data) : null;
+                 ZipOutput zextra = extra != null ? new ZipOutput(extra) : null) {
 
-               ZipEntry entry;
-               while ((entry = zinput.getNextEntry()) != null) {
-                   if (entry.getName().endsWith(".class")) {
-                       String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
+                Iterator<ZipTransformEntry> entries = zinput.getEntries();
+                while (entries.hasNext()) {
+                    ZipTransformEntry entry = entries.next();
+                    if (entry.getName().endsWith(".class")) {
+                        String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
 
-                       if (whitelist.isEmpty() || whitelist.contains(key)) {
-                           debug("  Slim  " + entry.getName());
-                           copy(entry, zinput, zslim);
-                       } else {
-                           debug("  Extra " + entry.getName());
-                           copy(entry, zinput, zextra);
-                       }
-                   } else {
-                       debug("  Data  " + entry.getName());
-                       copy(entry, zinput, merge ? zextra : zdata);
-                   }
+                        if (whitelist.isEmpty() || whitelist.contains(key)) {
+                            debug("  Slim  " + entry.getName());
+                            copy(entry, zinput, zslim);
+                        } else {
+                            debug("  Extra " + entry.getName());
+                            copy(entry, zinput, zextra);
+                        }
+                    } else {
+                        debug("  Data  " + entry.getName());
+                        copy(entry, zinput, merge ? zextra : zdata);
+                    }
 
-                   // To avoid spam, only change the progress every 10 files processed
-                   if ((++amount) % 10 == 0) {
-                       PROGRESS.setProgress(amount);
-                   }
-               }
+                    // To avoid spam, only change the progress every 10 files processed
+                    if ((++amount) % 10 == 0) {
+                        PROGRESS.setProgress(amount);
+                    }
+                }
             }
             PROGRESS.setProgress(fileAmount);
 
@@ -137,15 +135,11 @@ public class ConsoleTool {
         }
     }
 
-    private static byte[] BUFFER = new byte[1024];
-    private static void copy(ZipEntry entry, InputStream input, ZipOutputStream output) throws IOException {
-        ZipEntry _new = new ZipEntry(entry.getName());
-        _new.setTime(628041600000L); //Java8 screws up on 0 time, so use another static time.
-        output.putNextEntry(_new);
-
-        int read = -1;
-        while ((read = input.read(BUFFER)) != -1)
-            output.write(BUFFER, 0, read);
+    private static void copy(ZipTransformEntry entry, ZipInput input, ZipOutput output) throws IOException {
+        if (output == null) {
+            return;
+        }
+        input.transferEntry(entry, output);
     }
 
     private static void writeCache(File file, String inputSha, String srgSha) throws IOException {
@@ -153,8 +147,8 @@ public class ConsoleTool {
 
         File cacheFile = new File(file.getAbsolutePath() + ".cache");
         byte[] cache = ("Input: " + inputSha + "\n" +
-                        "Srg: " + srgSha + "\n" +
-                        "Output: " + sha1(file, false)).getBytes();
+                "Srg: " + srgSha + "\n" +
+                "Output: " + sha1(file, false)).getBytes();
         Files.write(cacheFile.toPath(), cache);
     }
 
@@ -170,9 +164,9 @@ public class ConsoleTool {
         if (cacheFile.exists()) {
             byte[] data = Files.readAllBytes(cacheFile.toPath());
             byte[] cache = ("Input: " + inputSha + "\n" +
-                            "Srg: " + srgSha + "\n" +
-                            "Output: " + sha1(file, false) +
-                            (extra == null ? "" : extra)).getBytes(); // Reading from disc is less costly/destructive then writing. So we can verify the output hasn't changed.
+                    "Srg: " + srgSha + "\n" +
+                    "Output: " + sha1(file, false) +
+                    (extra == null ? "" : extra)).getBytes(); // Reading from disc is less costly/destructive then writing. So we can verify the output hasn't changed.
 
             if (Arrays.equals(cache, data) && file.exists()) {
                 log("  " + name + " Cache Hit");
@@ -210,6 +204,8 @@ public class ConsoleTool {
             throw new RuntimeException(e);
         }
     }
+
+    private static final byte[] BUFFER = new byte[8192];
 
     private static String sha1(File path, boolean allowCache) throws IOException {
         if (!path.exists())
