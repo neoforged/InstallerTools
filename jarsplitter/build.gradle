@@ -6,6 +6,8 @@ application {
     mainClass = 'net.neoforged.jarsplitter.ConsoleTool'
 }
 
+evaluationDependsOn(":ziptransform")
+
 dependencies {
     implementation(libs.jopt)
     implementation(libs.srgutils)
