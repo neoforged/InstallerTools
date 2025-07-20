@@ -30,13 +30,13 @@ public final class ZipInput implements AutoCloseable {
 
     public void transferEntry(ZipTransformEntry entry, ZipOutput output) throws IOException {
         try (InputStream rawInput = input.getRawInputStream(entry.entry)) {
-            output.addRawArchiveEntry(entry.entry, rawInput);
+            output.addRawArchiveEntry(entry, rawInput);
         }
     }
 
     public void transferEntry(ZipTransformEntry entry, ZipTransformEntry destEntry, ZipOutput output) throws IOException {
         try (InputStream rawInput = input.getRawInputStream(entry.entry)) {
-            output.addRawArchiveEntry(destEntry.entry, rawInput);
+            output.addRawArchiveEntry(destEntry, rawInput);
         }
     }
 
