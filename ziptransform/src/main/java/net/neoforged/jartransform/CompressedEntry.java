@@ -15,7 +15,7 @@ public final class CompressedEntry {
     private final long uncompressedSize;
 
     public CompressedEntry(long crc32, byte[] compressedData, long uncompressedSize) {
-        if (crc32 < 0 || crc32 > Integer.MAX_VALUE) {
+        if (crc32 < 0) {
             throw new IllegalArgumentException("Invalid crc32: " + crc32);
         }
         if (uncompressedSize < 0) {
