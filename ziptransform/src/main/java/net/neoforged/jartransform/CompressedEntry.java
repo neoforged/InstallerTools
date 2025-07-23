@@ -39,13 +39,18 @@ public final class CompressedEntry {
     }
 
     public static CompressedEntry compress(byte[] uncompressedData) {
-        Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         ByteArrayOutputStream bos = new ByteArrayOutputStream(uncompressedData.length);
         CRC32 crc32 = new CRC32();
-        try (OutputStream out = new CheckedOutputStream(new DeflaterOutputStream(bos, deflater), crc32)) {
-            out.write(uncompressedData);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to compress data.", e);
+
+        Deflater deflater = DeflaterPool.borrow();
+        try {
+            try (OutputStream out = new CheckedOutputStream(new DeflaterOutputStream(bos, deflater), crc32)) {
+                out.write(uncompressedData);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to compress data.", e);
+            }
+        } finally {
+            DeflaterPool.release(deflater);
         }
 
         return new CompressedEntry(crc32.getValue(), bos.toByteArray(), uncompressedData.length);

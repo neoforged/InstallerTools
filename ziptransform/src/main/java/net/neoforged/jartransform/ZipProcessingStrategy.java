@@ -72,14 +72,17 @@ public interface ZipProcessingStrategy {
     static TransformedContent compressedContent(ZipTransformEntry entry, byte[] uncompressedContent) {
         TransformedContent content = new TransformedContent();
         content.entry = entry.copy();
-
-        Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         ByteArrayOutputStream bos = new ByteArrayOutputStream(uncompressedContent.length);
         CRC32 crc32 = new CRC32();
-        try (OutputStream out = new CheckedOutputStream(new DeflaterOutputStream(bos, deflater), crc32)) {
-            out.write(uncompressedContent);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to compress data for entry " + entry.getName(), e);
+        Deflater deflater = DeflaterPool.borrow();
+        try {
+            try (OutputStream out = new CheckedOutputStream(new DeflaterOutputStream(bos, deflater), crc32)) {
+                out.write(uncompressedContent);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to compress data for entry " + entry.getName(), e);
+            }
+        } finally {
+            DeflaterPool.release(deflater);
         }
 
         content.rawContent = bos.toByteArray();
