@@ -23,7 +23,7 @@ public final class ZipInput implements AutoCloseable {
     public Iterator<ZipTransformEntry> getEntries() {
         return new ZipInputEntryIterator(input.getEntries());
     }
-
+    
     public ZipTransformEntry getEntry(String name) {
         return new ZipTransformEntry(input.getEntry(name));
     }

@@ -7,7 +7,6 @@ import java.util.Iterator;
 
 final class ZipInputEntryIterator implements Iterator<ZipTransformEntry> {
     private final Enumeration<ZipArchiveEntry> entries;
-    private final ZipTransformEntry entry = new ZipTransformEntry((ZipArchiveEntry) null);
 
     ZipInputEntryIterator(Enumeration<ZipArchiveEntry> entries) {
         this.entries = entries;
@@ -20,7 +19,6 @@ final class ZipInputEntryIterator implements Iterator<ZipTransformEntry> {
 
     @Override
     public ZipTransformEntry next() {
-        entry.entry = entries.nextElement();
-        return entry;
+        return new ZipTransformEntry(entries.nextElement());
     }
 }
