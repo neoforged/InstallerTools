@@ -20,8 +20,22 @@ public final class ZipTransformEntry {
         }
     }
 
-    public ZipTransformEntry(String name) {
+    public ZipTransformEntry(String name, boolean compressed, long size, int crc, FileTime lastModified) {
         this.entry = new ZipArchiveEntry(name);
+        if (size != -1) {
+            this.entry.setSize(size);
+        }
+        if (crc != -1) {
+            this.entry.setCrc(crc);
+        }
+        this.entry.setMethod(compressed ? ZipArchiveEntry.DEFLATED : ZipArchiveEntry.STORED);
+        if (lastModified != null) {
+            this.entry.setLastModifiedTime(lastModified);
+        }
+    }
+
+    public ZipTransformEntry(String name) {
+        this(name, true, -1, -1, null);
     }
 
     /**

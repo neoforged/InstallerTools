@@ -28,6 +28,14 @@ public final class ZipInput implements AutoCloseable {
         return new ZipTransformEntry(input.getEntry(name));
     }
 
+    public InputStream openEntry(ZipTransformEntry entry) throws IOException {
+        return input.getInputStream(entry.entry);
+    }
+
+    InputStream openRawEntry(ZipTransformEntry entry) throws IOException {
+        return input.getRawInputStream(entry.entry);
+    }
+
     public void transferEntry(ZipTransformEntry entry, ZipOutput output) throws IOException {
         try (InputStream rawInput = input.getRawInputStream(entry.entry)) {
             output.addRawArchiveEntry(entry, rawInput);

@@ -31,6 +31,13 @@ public final class ZipOutput implements AutoCloseable {
         outputStream.addRawArchiveEntry(archiveEntry, new ByteArrayInputStream(precompressedData));
     }
 
+    public void addArchiveEntry(ZipTransformEntry entry, byte[] uncompressedData) throws IOException {
+        entry.entry.setSize(uncompressedData.length);
+        outputStream.putArchiveEntry(entry.entry);
+        outputStream.write(uncompressedData);
+        outputStream.closeArchiveEntry();
+    }
+
     public void addArchiveEntry(ZipTransformEntry entry, InputStream stream) throws IOException {
         outputStream.putArchiveEntry(entry.entry);
         byte[] buffer = new byte[8192];

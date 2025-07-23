@@ -14,6 +14,7 @@ apply plugin: ShadowDefaultsPlugin
 
 dependencies {
     implementation(libs.commons.compress)
+    testImplementation(libs.bundles.junit)
 }
 
 publishing {
