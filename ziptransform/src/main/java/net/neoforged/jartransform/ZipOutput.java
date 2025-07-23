@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.attribute.FileTime;
 
 public final class ZipOutput implements AutoCloseable {
     private final ZipArchiveOutputStream outputStream;
@@ -21,14 +22,18 @@ public final class ZipOutput implements AutoCloseable {
      * This is useful in scenarios where you'd want to offload the deflate compression to worker threads,
      * but write the ZIP in a single final thread.
      */
-    public void addPrecompressedEntry(ZipTransformEntry entry, int crc32, byte[] precompressedData, long uncompressedSize) throws IOException {
-        ZipArchiveEntry archiveEntry = new ZipArchiveEntry(entry.entry);
-        archiveEntry.setCrc(crc32);
-        archiveEntry.setCompressedSize(precompressedData.length);
-        archiveEntry.setSize(uncompressedSize);
+    public void addCompressedEntry(String name, FileTime lastModified, CompressedEntry compressedEntry) throws IOException {
+        ZipArchiveEntry archiveEntry = new ZipArchiveEntry(name);
+        if (lastModified != null) {
+            archiveEntry.setLastModifiedTime(lastModified);
+        }
+        archiveEntry.setCrc(compressedEntry.getCrc32());
+        byte[] compressedData = compressedEntry.getCompressedData();
+        archiveEntry.setCompressedSize(compressedData.length);
+        archiveEntry.setSize(compressedEntry.getUncompressedSize());
         archiveEntry.setMethod(ZipArchiveEntry.DEFLATED);
 
-        outputStream.addRawArchiveEntry(archiveEntry, new ByteArrayInputStream(precompressedData));
+        outputStream.addRawArchiveEntry(archiveEntry, new ByteArrayInputStream(compressedData));
     }
 
     public void addArchiveEntry(ZipTransformEntry entry, byte[] uncompressedData) throws IOException {
