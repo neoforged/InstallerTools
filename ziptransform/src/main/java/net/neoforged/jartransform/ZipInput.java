@@ -23,17 +23,21 @@ public final class ZipInput implements AutoCloseable {
     public Iterator<ZipTransformEntry> getEntries() {
         return new ZipInputEntryIterator(input.getEntries());
     }
-    
+
     public ZipTransformEntry getEntry(String name) {
         return new ZipTransformEntry(input.getEntry(name));
     }
 
     public InputStream openEntry(ZipTransformEntry entry) throws IOException {
-        return input.getInputStream(entry.entry);
+        synchronized (input) {
+            return input.getInputStream(entry.entry);
+        }
     }
 
     InputStream openRawEntry(ZipTransformEntry entry) throws IOException {
-        return input.getRawInputStream(entry.entry);
+        synchronized (input) {
+            return input.getRawInputStream(entry.entry);
+        }
     }
 
     public void transferEntry(ZipTransformEntry entry, ZipOutput output) throws IOException {
@@ -43,7 +47,7 @@ public final class ZipInput implements AutoCloseable {
     }
 
     public void transferEntry(ZipTransformEntry entry, ZipTransformEntry destEntry, ZipOutput output) throws IOException {
-        try (InputStream rawInput = input.getRawInputStream(entry.entry)) {
+        try (InputStream rawInput = openRawEntry(entry)) {
             output.addRawArchiveEntry(destEntry, rawInput);
         }
     }
