@@ -34,7 +34,7 @@ public final class ZipInput implements AutoCloseable {
         }
     }
 
-    InputStream openRawEntry(ZipTransformEntry entry) throws IOException {
+    public InputStream openRawEntry(ZipTransformEntry entry) throws IOException {
         synchronized (input) {
             return input.getRawInputStream(entry.entry);
         }
