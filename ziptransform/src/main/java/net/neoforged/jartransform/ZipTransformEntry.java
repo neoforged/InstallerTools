@@ -66,6 +66,14 @@ public final class ZipTransformEntry {
         return entry.getSize();
     }
 
+    public long getCrc32() {
+        return entry.getCrc();
+    }
+
+    public boolean isCompressed() {
+        return entry.getMethod() != ZipArchiveEntry.STORED;
+    }
+
     /**
      * @return a copy of this entry
      */
