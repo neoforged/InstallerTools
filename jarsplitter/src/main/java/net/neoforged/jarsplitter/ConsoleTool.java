@@ -4,6 +4,8 @@
  */
 package net.neoforged.jarsplitter;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -14,10 +16,12 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
@@ -25,7 +29,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import net.neoforged.cliutils.JarUtils;
 import net.neoforged.cliutils.progress.ProgressManager;
 import net.neoforged.cliutils.progress.ProgressReporter;
 import net.neoforged.srgutils.IMappingFile;
@@ -93,18 +96,18 @@ public class ConsoleTool {
                 return;
             }
 
-            final int fileAmount = JarUtils.getFileCountInZip(input);
-            PROGRESS.setMaxProgress(fileAmount);
-            log("Splitting " + fileAmount + " files:");
+            try (ZipFile zinput = new ZipFile(input);
+                 ZipOutputStream zslim = new ZipOutputStream(slim == null ? NULL_OUTPUT : new BufferedOutputStream(new FileOutputStream(slim)));
+                 ZipOutputStream zdata = new ZipOutputStream(data == null ? NULL_OUTPUT : new BufferedOutputStream(new FileOutputStream(data)));
+                 ZipOutputStream zextra = new ZipOutputStream(extra == null ? NULL_OUTPUT : new BufferedOutputStream(new FileOutputStream(extra)))) {
 
-            int amount = 0;
-            try (ZipInputStream zinput = new ZipInputStream(Files.newInputStream(input.toPath()));
-                 ZipOutputStream zslim = new ZipOutputStream(slim == null ? NULL_OUTPUT : new FileOutputStream(slim));
-                 ZipOutputStream zdata = new ZipOutputStream(data == null ? NULL_OUTPUT : new FileOutputStream(data));
-                 ZipOutputStream zextra = new ZipOutputStream(extra == null ? NULL_OUTPUT : new FileOutputStream(extra))) {
+                int amount = 0;
+                PROGRESS.setMaxProgress(zinput.size());
+                log("Splitting " + zinput.size() + " files:");
 
-               ZipEntry entry;
-               while ((entry = zinput.getNextEntry()) != null) {
+               Enumeration<? extends ZipEntry> entries = zinput.entries();
+               while (entries.hasMoreElements()) {
+                   ZipEntry entry = entries.nextElement();
                    if (entry.getName().endsWith(".class")) {
                        String key = entry.getName().substring(0, entry.getName().length() - 6); //String .class
 
@@ -121,12 +124,12 @@ public class ConsoleTool {
                    }
 
                    // To avoid spam, only change the progress every 10 files processed
-                   if ((++amount) % 10 == 0) {
+                   if ((++amount) % 100 == 0) {
                        PROGRESS.setProgress(amount);
                    }
                }
+                PROGRESS.setProgress(zinput.size());
             }
-            PROGRESS.setProgress(fileAmount);
 
             writeCache(slim, inputSha, srgSha);
             writeCache(data, inputSha, srgSha);
@@ -137,15 +140,17 @@ public class ConsoleTool {
         }
     }
 
-    private static byte[] BUFFER = new byte[1024];
-    private static void copy(ZipEntry entry, InputStream input, ZipOutputStream output) throws IOException {
+    private static byte[] BUFFER = new byte[8192];
+    private static void copy(ZipEntry entry, ZipFile input, ZipOutputStream output) throws IOException {
         ZipEntry _new = new ZipEntry(entry.getName());
         _new.setTime(628041600000L); //Java8 screws up on 0 time, so use another static time.
         output.putNextEntry(_new);
 
-        int read = -1;
-        while ((read = input.read(BUFFER)) != -1)
-            output.write(BUFFER, 0, read);
+        try (InputStream in = input.getInputStream(entry)) {
+            int read = -1;
+            while ((read = in.read(BUFFER)) != -1)
+                output.write(BUFFER, 0, read);
+        }
     }
 
     private static void writeCache(File file, String inputSha, String srgSha) throws IOException {
