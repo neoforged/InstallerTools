@@ -1,0 +1,78 @@
+// Gradle repositories and dependencies
+buildscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.guardsquare:proguard-gradle:7.5.0'
+    }
+}
+
+apply plugin: ProjectDefaultsPlugin
+apply plugin: ShadowDefaultsPlugin
+
+dependencies {
+    implementation(libs.commons.compress)
+    testImplementation(libs.bundles.junit)
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+
+        pom {
+            name = 'Jar Transform'
+            description = 'Library for applying optimized transformations to Jar or Zip files'
+        }
+    }
+}
+
+tasks.named("shadowJar").configure {
+    relocate("org.apache.commons", "net.neoforged.jartransform.shaded")
+}
+
+File proguardFile = file("build/libs/${jar.archiveBaseName.get()}-proguard-${version}.jar")
+
+final def proguardJar = tasks.register('proguardJar', proguard.gradle.ProGuardTask) {
+    dependsOn shadowJar
+    inputs.file(shadowJar.archiveFile)
+    inputs.file(file("proguard.conf"))
+
+    if (JavaLanguageVersion.current().asInt() <= 8) {
+        libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+    } else {
+        libraryjars "${System.getProperty('java.home')}/jmods"
+    }
+    libraryjars(configurations.compileClasspath)
+
+    // Exclude superfluous licenses in META-INF/, and also exclude some unused resources from apache commons codec,
+    // which compress transitively depends on
+    injars(["filter": "!META-INF/maven/**/*,!META-INF/*.txt,!net/neoforged/jartransform/shaded/codec/**/*.txt"], shadowJar.archiveFile)
+    outjars proguardFile
+    configuration file("proguard.conf")
+}
+
+/**
+ * Patch the jar so the obfuscated classes aren't visible since they are all concentrated in one package.
+ */
+final def visibilityPatchedJar = tasks.register('patchVisibilityJar', MakeObfuscatedClassesPackageVisibleTask) {
+    inputFiles.from(proguardJar.map { it.getOutJarFileCollection() })
+    outputFile.set(layout.buildDirectory.file("libs/${jar.archiveBaseName.get()}-patched-${version}.jar"))
+    fileTree("src/main/java").files.each {
+        final relativePath = file("src/main/java").relativePath(it)
+        final nameInZip = relativePath.replace('\\', '/').replace(".java", ".class").replace("src/main/java/", "")
+        println(nameInZip)
+        classWhitelist.add(nameInZip)
+    }
+}
+
+assemble.dependsOn visibilityPatchedJar
+
+configurations {
+    consumable("proguard")
+}
+
+artifacts {
+    add("proguard", visibilityPatchedJar)
+}

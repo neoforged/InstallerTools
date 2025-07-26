@@ -31,6 +31,7 @@ dependencyResolutionManagement {
             library('assert4j', 'org.assertj:assertj-core:3.27.3')
             bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'assert4j'])
 
+            library('commons-compress', 'org.apache.commons:commons-compress:1.27.1')
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
             library('xz', 'org.tukaani:xz:1.10')
@@ -57,5 +58,6 @@ include(':jarsplitter')
 include(':binarypatcher')
 include(':zipinject')
 include(':problems-api')
+include(':ziptransform')
 
 rootProject.name = 'installertools'
