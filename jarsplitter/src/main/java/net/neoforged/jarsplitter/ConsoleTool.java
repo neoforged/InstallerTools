@@ -123,7 +123,7 @@ public class ConsoleTool {
                        copy(entry, zinput, merge ? zextra : zdata);
                    }
 
-                   // To avoid spam, only change the progress every 10 files processed
+                   // To avoid spam, only change the progress every 100 files processed
                    if ((++amount) % 100 == 0) {
                        PROGRESS.setProgress(amount);
                    }
