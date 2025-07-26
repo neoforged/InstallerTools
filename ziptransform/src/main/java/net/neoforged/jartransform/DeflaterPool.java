@@ -23,6 +23,8 @@ final class DeflaterPool {
         deflater.reset();
         if (deflaters.size() < ForkJoinPool.getCommonPoolParallelism()) {
             deflaters.add(deflater);
+        } else {
+            deflater.end();
         }
     }
 }
