@@ -22,12 +22,17 @@ license {
 }
 
 dependencies {
+    compileOnly(libs.jetbrains.annotations)
+    implementation(libs.art)
     implementation(libs.srgutils)
     implementation(libs.jopt)
     implementation(libs.gson)
     implementation(libs.fastcsv)
     implementation(libs.asm.commons)
+    implementation(libs.xz)
+    implementation(libs.xdelta)
     implementation project(':cli-utils')
+    implementation project(':binarypatcher')
 
     testImplementation(libs.bundles.junit)
 }

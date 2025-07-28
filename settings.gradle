@@ -30,6 +30,7 @@ dependencyResolutionManagement {
             library('assert4j', 'org.assertj:assertj-core:3.27.3')
             bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'assert4j'])
 
+            library('art', 'net.neoforged:AutoRenamingTool:2.0.12-in-memory-api')
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
             library('xz', 'org.tukaani:xz:1.10')
@@ -48,6 +49,7 @@ dependencyResolutionManagement {
     rulesMode = RulesMode.FAIL_ON_PROJECT_RULES
     repositories {
         mavenCentral()
+        mavenLocal()
     }
 }
 
