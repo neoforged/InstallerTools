@@ -36,7 +36,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -47,6 +48,7 @@ import java.util.zip.ZipOutputStream;
 
 public class ProcessMinecraftJar extends Task {
     public static final long NEW_ENTRY_ZIPTIME = 628041600000L;
+    private ExecutorService executorService;
 
     @Override
     public void process(String[] args) throws IOException {
@@ -96,7 +98,13 @@ public class ProcessMinecraftJar extends Task {
         File neoformDataFile = options.valueOf(neoformDataArg);
         File patchesArchiveFile = options.valueOf(patchesArchiveArg);
 
-        processZip(inputFile, inputDist, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFile);
+        executorService = Executors.newWorkStealingPool();
+        try {
+            processZip(inputFile, inputDist, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFile);
+        } finally {
+            executorService.shutdown();
+            executorService = null;
+        }
 
         logElapsed("overall work", start);
     }
@@ -116,7 +124,7 @@ public class ProcessMinecraftJar extends Task {
         // TODO if dist == server -> extract server zip, unpack libraries, then read from temp-file or such
         CompletableFuture<Map<String, InputFileEntry>> outputEntries = supplyAsync("load input zip", () -> loadInputZip(inputFile));
 
-        outputEntries = outputEntries.thenCombineAsync(mappings, this::deobfuscateJar);
+        outputEntries = deobfuscateJarAsync(outputEntries, mappings);
 
         // If patches are supplied, apply them
         if (patchesArchiveFile != null) {
@@ -313,7 +321,13 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    private Map<String, InputFileEntry> deobfuscateJar(Map<String, InputFileEntry> inputEntries, IMappingFile mappings) {
+    private CompletableFuture<Map<String, InputFileEntry>> deobfuscateJarAsync(CompletableFuture<Map<String, InputFileEntry>> entries,
+                                                                               CompletableFuture<IMappingFile> mappings) {
+        return CompletableFuture.allOf(entries, mappings)
+                .thenCompose(unused -> deobfuscateJar(entries.join(), mappings.join()));
+    }
+
+    private CompletableFuture<Map<String, InputFileEntry>> deobfuscateJar(Map<String, InputFileEntry> inputEntries, IMappingFile mappings) {
         long start = System.nanoTime();
         Renamer.Builder builder = Renamer.builder();
         builder.withJvmClasspath();
@@ -331,16 +345,23 @@ public class ProcessMinecraftJar extends Task {
                 .map(entry -> Transformer.Entry.ofFile(entry.name, entry.lastModified, entry.content))
                 .collect(Collectors.toList());
 
-        List<Transformer.Entry> newEntries = renamer.run(entries);
+        return renamer.run(entries, executorService)
+                .thenApply(entryList -> {
+                    try {
+                        renamer.close();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException("Failed to close renamer.", e);
+                    }
 
-        Map<String, InputFileEntry> result = newEntries.stream().map(entry -> new InputFileEntry(entry.getName(), entry.getTime(), entry.getData())).collect(Collectors.toMap(
-                InputFileEntry::getName,
-                e -> e,
-                (x, y) -> x,
-                LinkedHashMap::new
-        ));
-        logElapsed("deobfuscate jar", start);
-        return result;
+                    Map<String, InputFileEntry> result = entryList.stream().map(entry -> new InputFileEntry(entry.getName(), entry.getTime(), entry.getData())).collect(Collectors.toMap(
+                            InputFileEntry::getName,
+                            e -> e,
+                            (x, y) -> x,
+                            LinkedHashMap::new
+                    ));
+                    logElapsed("deobfuscate jar", start);
+                    return result;
+                });
     }
 
     private static class InputFileEntry {
@@ -376,8 +397,8 @@ public class ProcessMinecraftJar extends Task {
         SERVER
     }
 
-    private static <T> CompletableFuture<T> supplyAsync(String task, ThrowingSupplier<T> callable) {
-        return CompletableFuture.supplyAsync(wrapTask(task, callable));
+    private <T> CompletableFuture<T> supplyAsync(String task, ThrowingSupplier<T> callable) {
+        return CompletableFuture.supplyAsync(wrapTask(task, callable), executorService);
     }
 
     private static <T> Supplier<T> wrapTask(String task, ThrowingSupplier<T> callable) {

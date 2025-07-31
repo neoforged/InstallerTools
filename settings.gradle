@@ -29,8 +29,7 @@ dependencyResolutionManagement {
             library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.13.1')
             library('assert4j', 'org.assertj:assertj-core:3.27.3')
             bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'assert4j'])
-
-            library('art', 'net.neoforged:AutoRenamingTool:2.0.12-in-memory-api')
+            library('art', 'net.neoforged:autorenamingtool:2.0.17-pr-20-in-memory-api')
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
             library('xz', 'org.tukaani:xz:1.10')
@@ -49,7 +48,13 @@ dependencyResolutionManagement {
     rulesMode = RulesMode.FAIL_ON_PROJECT_RULES
     repositories {
         mavenCentral()
-        mavenLocal()
+        maven {
+            name = "Maven for PR #20" // https://github.com/neoforged/AutoRenamingTool/pull/20
+            url = uri("https://prmaven.neoforged.net/AutoRenamingTool/pr20")
+            content {
+                includeModule("net.neoforged", "autorenamingtool")
+            }
+        }
     }
 }
 
