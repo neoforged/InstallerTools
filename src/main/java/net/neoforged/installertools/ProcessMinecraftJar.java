@@ -130,7 +130,7 @@ public class ProcessMinecraftJar extends Task {
         if (patchesArchiveFiles.size() == 1) {
             // Simplified form if only a single patch list is given
             File archiveFile = patchesArchiveFiles.get(0);
-            return supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchLists(archiveFile, null));
+            return supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchList(archiveFile, null));
         }
 
         List<List<Patch>> patchLists = new ArrayList<>(patchesArchiveFiles.size());
@@ -142,7 +142,7 @@ public class ProcessMinecraftJar extends Task {
         for (int i = 0; i < patchesArchiveFiles.size(); i++) {
             int patchListIndex = i;
             File archiveFile = patchesArchiveFiles.get(i);
-            patchesLoadFutures[i] = supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchLists(archiveFile, null))
+            patchesLoadFutures[i] = supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchList(archiveFile, null))
                     .thenAccept(patchList -> patchLists.set(patchListIndex, patchList));
         }
         // Merge the patch lists into a single list
@@ -202,7 +202,7 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    private List<Patch> loadPatchLists(File patchesArchiveFile, String prefix) throws IOException {
+    private List<Patch> loadPatchList(File patchesArchiveFile, String prefix) throws IOException {
         List<Patch> patches = new ArrayList<>();
 
         try (InputStream input = new FileInputStream(patchesArchiveFile)) {
@@ -329,6 +329,16 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private IMappingFile loadNeoformMappings(File neoformDataFile) {
+        // Support both the version where we have to read the NeoForm file, and the version where we get the mapping file directly.
+        if (neoformDataFile.getName().endsWith(".lzma")) {
+            try (InputStream input = new FileInputStream(neoformDataFile);
+                 InputStream stream = new LZMAInputStream(new BufferedInputStream(input))) {
+                return IMappingFile.load(stream);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read LZMA-compressed NeoForm mappings " + neoformDataFile, e);
+            }
+        }
+
         try (ZipFile zipFile = new ZipFile(neoformDataFile)) {
             String mappingsPath = McpData.readDataEntry(zipFile, "mappings");
 
