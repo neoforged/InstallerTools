@@ -5,7 +5,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import net.neoforged.art.api.IdentifierFixerConfig;
 import net.neoforged.art.api.Renamer;
 import net.neoforged.art.api.SignatureStripperConfig;
@@ -32,7 +31,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -56,16 +54,12 @@ public class ProcessMinecraftJar extends Task {
         long start = System.nanoTime();
 
         OptionParser parser = new OptionParser();
-        OptionSpecBuilder clientArgBuilder = parser.accepts("client", "The original Minecraft client jar. Either this or --server must be given.");
-        OptionSpecBuilder serverArgBuilder = parser.accepts("server", "The original Minecraft server jar. Either this or --server must be given.");
-        OptionSpec<File> clientArg = clientArgBuilder.availableUnless("server").requiredUnless("server").withOptionalArg().ofType(File.class);
-        OptionSpec<File> clientMappingsArg = parser.accepts("client-mappings", "The original Minecraft mappings for the client jar. Required when --client is given.").availableIf("client").requiredIf("client").withRequiredArg().ofType(File.class);
-        OptionSpec<File> serverArg = serverArgBuilder.availableUnless("client").requiredUnless("client").withOptionalArg().ofType(File.class);
-        OptionSpec<File> serverMappingsArg = parser.accepts("server-mappings", "The original Minecraft mappings for the server jar. Required when --server is given.").availableIf("client").requiredIf("server").withRequiredArg().ofType(File.class);
-        OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> inputArg = parser.accepts("input", "The original Minecraft jar. Either a server or client jar can be given.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> inputMappingsArg = parser.accepts("input-mappings", "The official Mappings text-file matching the input jar.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names.").withOptionalArg().ofType(File.class);
         OptionSpec<File> outputArg = parser.accepts("output", "Where the resulting processed jar is written to.").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withOptionalArg().ofType(File.class);
-        OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply").withOptionalArg().ofType(File.class);
+        OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply. Multiple can be specified and will be applied in-order.").withOptionalArg().ofType(File.class);
 
         OptionSet options;
         try {
@@ -76,31 +70,17 @@ public class ProcessMinecraftJar extends Task {
             return;
         }
 
-        File inputFile;
-        File inputMappingsFile;
-        InputDist inputDist;
-        File clientFile = options.valueOf(clientArg);
-        File serverFile = options.valueOf(serverArg);
-        if (clientFile != null) {
-            inputDist = InputDist.CLIENT;
-            inputFile = clientFile;
-            inputMappingsFile = Objects.requireNonNull(options.valueOf(clientMappingsArg), "client mappings");
-        } else if (serverFile != null) {
-            inputDist = InputDist.SERVER;
-            inputFile = serverFile;
-            inputMappingsFile = Objects.requireNonNull(options.valueOf(serverMappingsArg), "server mappings");
-        } else {
-            throw new IllegalStateException("Either client or server are missing.");
-        }
+        File inputFile = options.valueOf(inputArg);
+        File inputMappingsFile = options.valueOf(inputMappingsArg);
 
         File librariesFolder = options.valueOf(outputLibrariesArg);
         File outputFile = options.valueOf(outputArg);
         File neoformDataFile = options.valueOf(neoformDataArg);
-        File patchesArchiveFile = options.valueOf(patchesArchiveArg);
+        List<File> patchesArchiveFiles = options.valuesOf(patchesArchiveArg);
 
         executorService = Executors.newWorkStealingPool();
         try {
-            processZip(inputFile, inputDist, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFile);
+            processZip(inputFile, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles);
         } finally {
             executorService.shutdown();
             executorService = null;
@@ -110,25 +90,23 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private void processZip(File inputFile,
-                            InputDist inputDist,
                             File inputMappingsFile,
                             File outputFile,
                             @Nullable File librariesFolder,
                             @Nullable File neoformDataFile,
-                            @Nullable File patchesArchiveFile) {
+                            List<File> patchesArchiveFiles) {
         CompletableFuture<IMappingFile> mappings = supplyAsync("load mappings", () -> loadMappings(inputMappingsFile));
         if (neoformDataFile != null) {
             CompletableFuture<IMappingFile> parameterMappings = supplyAsync("load parameter mappings", () -> loadNeoformMappings(neoformDataFile));
             mappings = mappings.thenCombineAsync(parameterMappings, this::mergeMappings);
         }
-        // TODO if dist == server -> extract server zip, unpack libraries, then read from temp-file or such
-        CompletableFuture<Map<String, InputFileEntry>> outputEntries = supplyAsync("load input zip", () -> loadInputZip(inputFile));
+        CompletableFuture<Map<String, InputFileEntry>> outputEntries = supplyAsync("load input zip", () -> loadInputZip(inputFile, librariesFolder));
 
         outputEntries = deobfuscateJarAsync(outputEntries, mappings);
 
         // If patches are supplied, apply them
-        if (patchesArchiveFile != null) {
-            CompletableFuture<List<Patch>> patches = supplyAsync("load patches", () -> loadPatches(patchesArchiveFile, null));
+        if (!patchesArchiveFiles.isEmpty()) {
+            CompletableFuture<List<Patch>> patches = loadPatchLists(patchesArchiveFiles);
 
             outputEntries = outputEntries.thenCombineAsync(patches, this::applyPatches);
         }
@@ -146,6 +124,35 @@ public class ProcessMinecraftJar extends Task {
             }
             throw new RuntimeException(e.getCause());
         }
+    }
+
+    private CompletableFuture<List<Patch>> loadPatchLists(List<File> patchesArchiveFiles) {
+        if (patchesArchiveFiles.size() == 1) {
+            // Simplified form if only a single patch list is given
+            File archiveFile = patchesArchiveFiles.get(0);
+            return supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchLists(archiveFile, null));
+        }
+
+        List<List<Patch>> patchLists = new ArrayList<>(patchesArchiveFiles.size());
+        for (int i = 0; i < patchesArchiveFiles.size(); i++) {
+            patchLists.add(null); // Pre-allocate the list
+        }
+
+        CompletableFuture<?>[] patchesLoadFutures = new CompletableFuture[patchesArchiveFiles.size()];
+        for (int i = 0; i < patchesArchiveFiles.size(); i++) {
+            int patchListIndex = i;
+            File archiveFile = patchesArchiveFiles.get(i);
+            patchesLoadFutures[i] = supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchLists(archiveFile, null))
+                    .thenAccept(patchList -> patchLists.set(patchListIndex, patchList));
+        }
+        // Merge the patch lists into a single list
+        return CompletableFuture.allOf(patchesLoadFutures).thenApply(unused -> {
+            // Merge the patch lists
+            int overallSize = patchLists.stream().mapToInt(List::size).sum();
+            List<Patch> patchList = new ArrayList<>(overallSize);
+            patchLists.forEach(patchList::addAll);
+            return patchList;
+        });
     }
 
     private Map<String, InputFileEntry> applyPatches(Map<String, InputFileEntry> entries, List<Patch> patches) {
@@ -195,7 +202,7 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    private List<Patch> loadPatches(File patchesArchiveFile, String prefix) throws IOException {
+    private List<Patch> loadPatchLists(File patchesArchiveFile, String prefix) throws IOException {
         List<Patch> patches = new ArrayList<>();
 
         try (InputStream input = new FileInputStream(patchesArchiveFile)) {
@@ -267,11 +274,11 @@ public class ProcessMinecraftJar extends Task {
         return merged;
     }
 
-    private static Map<String, InputFileEntry> loadInputZip(File inputFile) {
+    private static Map<String, InputFileEntry> loadInputZip(File inputFile, @Nullable File librariesFolder) {
         ByteArrayOutputStream bout = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
 
-        try (ZipFile zipFile = new ZipFile(inputFile)) {
+        try (ZipFile zipFile = openMinecraftJar(inputFile, librariesFolder)) {
             Map<String, InputFileEntry> result = new LinkedHashMap<>();
 
             Enumeration<? extends ZipEntry> entries = zipFile.entries();
@@ -298,6 +305,27 @@ public class ProcessMinecraftJar extends Task {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to open input zip " + inputFile, e);
         }
+    }
+
+    private static ZipFile openMinecraftJar(File inputFile, @Nullable File librariesFolder) throws IOException {
+        ZipFile zf = new ZipFile(inputFile);
+
+        // Before doing anything else, we will check if the input ZIP is a bundle
+        try {
+            BundleInfo bundleInfo = BundleInfo.of(zf);
+            if (bundleInfo != null) {
+                // Extract the bundle, close the original zip and return the inner jar
+                File mainJar = bundleInfo.extractAndReturnPrimaryJar(zf, librariesFolder);
+                mainJar.deleteOnExit();
+                zf.close();
+                return new ZipFile(mainJar);
+            }
+        } catch (Exception e) {
+            zf.close();
+            throw e;
+        }
+
+        return zf;
     }
 
     private IMappingFile loadNeoformMappings(File neoformDataFile) {

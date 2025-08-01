@@ -18,6 +18,8 @@
  */
 package net.neoforged.installertools.util;
 
+import net.neoforged.installertools.McpData;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -92,18 +94,22 @@ public enum HashFunction {
 
     public String hash(InputStream stream) throws IOException {
         MessageDigest hash = get();
-        byte[] buf = new byte[1024];
+        byte[] buf = new byte[8192];
         int count = -1;
         while ((count = stream.read(buf)) != -1)
             hash.update(buf, 0, count);
-        return pad(new BigInteger(1, hash.digest()).toString(16));
+        return formatHash(hash);
+    }
+
+    public String formatHash(MessageDigest digest) {
+        return pad(new BigInteger(1, digest.digest()).toString(16));
     }
 
     public String hash(byte[] data) {
         return pad(new BigInteger(1, get().digest(data)).toString(16));
     }
 
-    public String pad(String hash) {
+    public  String pad(String hash) {
         return (pad + hash).substring(hash.length());
     }
 }
