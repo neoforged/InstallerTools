@@ -1,5 +1,7 @@
 package net.neoforged.installertools;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.nothome.delta.GDiffPatcher;
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
@@ -24,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -45,6 +48,8 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 public class ProcessMinecraftJar extends Task {
+    static final long STABLE_TIMESTAMP = 0x386D4380; //01/01/2000 00:00:00 java 8 breaks when using 0.
+
     public static final long NEW_ENTRY_ZIPTIME = 628041600000L;
     private ExecutorService executorService;
 
@@ -56,10 +61,11 @@ public class ProcessMinecraftJar extends Task {
         OptionParser parser = new OptionParser();
         OptionSpec<File> inputArg = parser.accepts("input", "The original Minecraft jar. Either a server or client jar can be given.").withRequiredArg().ofType(File.class);
         OptionSpec<File> inputMappingsArg = parser.accepts("input-mappings", "The official Mappings text-file matching the input jar.").withRequiredArg().ofType(File.class);
-        OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names.").withOptionalArg().ofType(File.class);
+        OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names, or a LZMA compressed NeoForm mappings file.").withOptionalArg().ofType(File.class);
         OptionSpec<File> outputArg = parser.accepts("output", "Where the resulting processed jar is written to.").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withOptionalArg().ofType(File.class);
         OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply. Multiple can be specified and will be applied in-order.").withOptionalArg().ofType(File.class);
+        OptionSpec<Void> noModManifest = parser.accepts("no-mod-manifest", "Disables adding a neoforge.mods.toml mod manifest");
 
         OptionSet options;
         try {
@@ -78,9 +84,11 @@ public class ProcessMinecraftJar extends Task {
         File neoformDataFile = options.valueOf(neoformDataArg);
         List<File> patchesArchiveFiles = options.valuesOf(patchesArchiveArg);
 
+        boolean addModManifest = !options.has(noModManifest);
+
         executorService = Executors.newWorkStealingPool();
         try {
-            processZip(inputFile, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles);
+            processZip(inputFile, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
         } finally {
             executorService.shutdown();
             executorService = null;
@@ -94,7 +102,8 @@ public class ProcessMinecraftJar extends Task {
                             File outputFile,
                             @Nullable File librariesFolder,
                             @Nullable File neoformDataFile,
-                            List<File> patchesArchiveFiles) {
+                            List<File> patchesArchiveFiles,
+                            boolean addModManifest) {
         CompletableFuture<IMappingFile> mappings = supplyAsync("load mappings", () -> loadMappings(inputMappingsFile));
         if (neoformDataFile != null) {
             CompletableFuture<IMappingFile> parameterMappings = supplyAsync("load parameter mappings", () -> loadNeoformMappings(neoformDataFile));
@@ -111,7 +120,16 @@ public class ProcessMinecraftJar extends Task {
             outputEntries = outputEntries.thenCombineAsync(patches, this::applyPatches);
         }
 
-        CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> writeOutputFile(outputFile, outputFileEntries.values()));
+        CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> {
+            // Add a mod manifest if requested
+            if (addModManifest) {
+                String minecraftVersion = getMinecraftVersion(outputFileEntries);
+                InputFileEntry manifestEntry = createMinecraftModManifest(minecraftVersion);
+                outputFileEntries.put(manifestEntry.name, manifestEntry);
+            }
+
+            writeOutputFile(outputFile, outputFileEntries.values());
+        });
 
         try {
             outputFileFuture.get();
@@ -124,6 +142,15 @@ public class ProcessMinecraftJar extends Task {
             }
             throw new RuntimeException(e.getCause());
         }
+    }
+
+    private static String getMinecraftVersion(Map<String, InputFileEntry> entries) {
+        InputFileEntry versionJsonEntry = entries.get("version.json");
+        if (versionJsonEntry == null) {
+            return "unknown";
+        }
+        JsonObject versionManifest = new Gson().fromJson(new String(versionJsonEntry.getContent(), StandardCharsets.UTF_8), JsonObject.class);
+        return versionManifest.getAsJsonPrimitive("id").getAsString();
     }
 
     private CompletableFuture<List<Patch>> loadPatchLists(List<File> patchesArchiveFiles) {
@@ -462,5 +489,21 @@ public class ProcessMinecraftJar extends Task {
     @FunctionalInterface
     private interface ThrowingSupplier<T> {
         T call() throws Exception;
+    }
+
+    private InputFileEntry createMinecraftModManifest(String version) {
+        String modManifest = "modLoader=\"minecraft\"\n" +
+                "license=\"Minecraft EULA\"\n" +
+                "[[mods]]\n" +
+                "modId=\"minecraft\"\n" +
+                "version=\"" + version + "\"\n" +
+                "displayName=\"Minecraft\"\n" +
+                "authors=\"Mojang Studios\"\n";
+
+        return new InputFileEntry(
+                "META-INF/neoforge.mods.toml",
+                STABLE_TIMESTAMP,
+                modManifest.getBytes(StandardCharsets.UTF_8)
+        );
     }
 }
