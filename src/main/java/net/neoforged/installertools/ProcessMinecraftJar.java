@@ -502,7 +502,8 @@ public class ProcessMinecraftJar extends Task {
                 "modId=\"minecraft\"\n" +
                 "version=\"" + version + "\"\n" +
                 "displayName=\"Minecraft\"\n" +
-                "authors=\"Mojang Studios\"\n";
+                "authors=\"Mojang Studios\"\n" +
+                "description=\"\"\n";
 
         return new InputFileEntry(
                 "META-INF/neoforge.mods.toml",
