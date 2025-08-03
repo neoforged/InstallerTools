@@ -256,6 +256,10 @@ public class ProcessMinecraftJar extends Task {
     private void writeOutputFile(File outputFile, Collection<InputFileEntry> outputFileEntries) {
         long start = System.nanoTime();
 
+        if (outputFile.getParentFile() != null) {
+            outputFile.getParentFile().mkdirs();
+        }
+
         Set<String> writtenDirectories = new HashSet<>();
         try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outputFile)))) {
 
