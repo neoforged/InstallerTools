@@ -25,13 +25,15 @@ public class ConsoleTool {
         OptionSpec<File> cleanO = parser.accepts("clean").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> outputO = parser.accepts("output").withRequiredArg().ofType(File.class).required();
         OptionSpec<String> prefixO = parser.accepts("prefix").withRequiredArg();
+        OptionSpec<Void> packO = parser.accepts("pack200");
+        OptionSpec<Void> legacyO = parser.accepts("legacy", "Uses the legacy patch header format, also implies --pack200. NOT RECOMENDED.");
         OptionSpec<Void> minimizeO = parser.accepts("minimize");
-        OptionSpec<Void> verbose0 = parser.accepts("verbose");
 
         // Create arguments
         OptionSpec<File> createO = parser.acceptsAll(Arrays.asList("dirty", "create")).withRequiredArg().ofType(File.class);
         OptionSpec<File> patchesO = parser.accepts("patches", "Source patch files; binpatches will include classes matching source patched classes or their inner classes.").withRequiredArg().ofType(File.class);
         OptionSpec<File> includeClassesO = parser.accepts("include-classes", "Source jars determining classes (and matching inner classes) to include, in addition to those specified by --patches.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> srgO = parser.accepts("srg").withRequiredArg().ofType(File.class);
 
         // Apply arguments
         OptionSpec<File> applyO = parser.accepts("apply").withRequiredArg().ofType(File.class);
@@ -42,6 +44,8 @@ public class ConsoleTool {
             OptionSet options = parser.parse(args);
 
             File output = options.valueOf(outputO).getAbsoluteFile();
+            boolean legacy = options.has(legacyO);
+            boolean pack200 = legacy || options.has(packO);
             boolean minimizePatches = options.has(minimizeO);
 
             if (output.exists() && !output.delete())
@@ -63,12 +67,11 @@ public class ConsoleTool {
 
                 log("Generating: ");
                 log("  Output:  " + output);
+                log("  Pack200: " + pack200);
+                log("  Legacy:    " + legacy);
                 log("  Minimize patches: " + minimizePatches);
 
-                Generator gen = new Generator(output).minimizePatches(minimizePatches);
-                if (options.has(verbose0)) {
-                    gen.debug();
-                }
+                Generator gen = new Generator(output).pack200(pack200).legacy(legacy).minimizePatches(minimizePatches);
 
                 if (clean.size() > 1 || dirty.size() > 1 || prefixes.size() > 1) {
                     if (clean.size() != dirty.size() || dirty.size() != prefixes.size()) {
@@ -116,10 +119,18 @@ public class ConsoleTool {
                     }
                 }
 
+                if (options.has(srgO)) {
+                    for (File file : options.valuesOf(srgO)) {
+                        log("  SRG:     " + file);
+                        gen.loadMappings(file);
+                    }
+                }
+
                 gen.create();
             } else if (options.has(applyO)) {
                 File clean_jar = options.valueOf(cleanO);
 
+                if (options.has(srgO))            err("Connot specify --apply and --srg at the same time!");
                 if (options.has(patchesO))        err("Connot specify --apply and --patches at the same time!");
                 if (options.has(includeClassesO)) err("Connot specify --apply and --include-classes at the same time!");
 
@@ -127,13 +138,17 @@ public class ConsoleTool {
 
                 Patcher patcher = new Patcher(clean_jar, output)
                     .keepData(options.has(dataO))
-                    .includeUnpatched(options.has(unpatchedO));
+                    .includeUnpatched(options.has(unpatchedO))
+                    .pack200(pack200)
+                    .legacy(legacy);
 
                 log("Applying: ");
                 log("  Clean:     " + clean_jar);
                 log("  Output:    " + output);
                 log("  KeepData:  " + options.has(dataO));
                 log("  Unpatched: " + options.has(unpatchedO));
+                log("  Pack200:   " + pack200);
+                log("  Legacy:    " + legacy);
 
                 List<File> patches = options.valuesOf(applyO);
                 List<String> prefixes = options.valuesOf(prefixO);

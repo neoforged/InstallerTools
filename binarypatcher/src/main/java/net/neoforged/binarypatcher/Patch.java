@@ -42,10 +42,6 @@ public class Patch {
         return new Patch(obf, srg, clean.length != 0, checksum, diff);
     }
 
-    /**
-     * This will reuse the symbol table of the clean class-file as-is for the symbol table of the dirty class
-     * and then just append any new entries to the end. This minimizes the patch file size.
-     */
     private static byte[] shrinkDirtyForPatch(byte[] clean, byte[] dirty) {
         if (clean.length == 0 || dirty.length == 0) {
             return dirty;
@@ -60,7 +56,6 @@ public class Patch {
     public byte[] toBytes() {
         return toBytes(false);
     }
-
     public byte[] toBytes(boolean legacy) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream(data.length + obf.length() + srg.length() + 1);
         DataOutputStream out = new DataOutputStream(bos);

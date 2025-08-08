@@ -4,42 +4,52 @@
  */
 package net.neoforged.binarypatcher;
 
-import org.tukaani.xz.LZMA2Options;
-import org.tukaani.xz.LZMAOutputStream;
-
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Map.Entry;
+import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
-import java.util.stream.Stream;
+import java.util.jar.Pack200;
+import java.util.jar.Pack200.Packer;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import net.neoforged.srgutils.IMappingFile;
+import org.tukaani.xz.LZMA2Options;
+import org.tukaani.xz.LZMAOutputStream;
+
 public class Generator {
+    public static final String EXTENSION = ".lzma";
     private static final byte[] EMPTY_DATA = new byte[0];
+
+    private final Map<String, String> o2m = new HashMap<>();
+    private final Map<String, String> m2o = new HashMap<>();
     private final Set<String> includedClasses = new TreeSet<>();
 
     private final File output;
     private final List<PatchSet> sets = new ArrayList<>();
+    private boolean pack200 = false;
+    private boolean legacy = false;
     private boolean minimizePatches = false;
-    private boolean debug;
 
     public Generator(File output) {
         this.output = output;
@@ -60,8 +70,21 @@ public class Generator {
         return this;
     }
 
-    public Generator debug() {
-        this.debug = true;
+    public Generator pack200() {
+        return this.pack200(true);
+    }
+
+    public Generator pack200(boolean value) {
+        this.pack200 = value;
+        return this;
+    }
+
+    public Generator legacy() {
+        return this.legacy(true);
+    }
+
+    public Generator legacy(boolean value) {
+        this.legacy = value;
         return this;
     }
 
@@ -74,17 +97,23 @@ public class Generator {
         return this;
     }
 
+    public void loadMappings(File srg) throws IOException {
+        IMappingFile map = IMappingFile.load(srg);
+        map.getClasses().forEach(cls -> {
+            o2m.put(cls.getOriginal(), cls.getMapped());
+            m2o.put(cls.getOriginal(), cls.getMapped());
+        });
+    }
+
     public void loadPatches(File root) throws IOException {
         int base = root.getAbsolutePath().length();
         int suffix = ".java.patch".length();
-        try (Stream<Path> stream = Files.walk(root.toPath())) {
-            stream.filter(Files::isRegularFile).map(p -> p.toAbsolutePath().toString()).filter(p -> p.endsWith(".java.patch")).forEach(path -> {
-                String relative = path.substring(base + 1).replace('\\', '/');
-                includedClasses.add(relative.substring(0, relative.length() - suffix));
-            });
-        }
+        Files.walk(root.toPath()).filter(Files::isRegularFile).map(p -> p.toAbsolutePath().toString()).filter(p -> p.endsWith(".java.patch")).forEach(path -> {
+            String relative = path.substring(base+1).replace('\\', '/');
+            includedClasses.add(relative.substring(0, relative.length() - suffix));
+        });
     }
-
+    
     public void loadIncludeClasses(File archive) throws IOException {
         try (ZipFile zip = new ZipFile(archive)) {
             Enumeration<? extends ZipEntry> entries = zip.entries();
@@ -106,35 +135,37 @@ public class Generator {
             if (set.prefix == null)
                 binpatches.putAll(tmp);
             else
-                tmp.forEach((key, value) -> binpatches.put(set.prefix + '/' + key, value));
+                tmp.forEach((key,value) -> binpatches.put(set.prefix + '/' + key, value));
         }
 
         byte[] data = createJar(binpatches);
+        if (pack200)
+            data = pack200(data);
         data = lzma(data);
         try (FileOutputStream fos = new FileOutputStream(output)) {
             fos.write(data);
         }
     }
 
-    private static String getOutermostClassName(String className) {
-        int idx = className.indexOf('$');
-        return idx == -1 ? className : className.substring(0, idx);
-    }
-
-    private static String getClassNameFromEntry(ZipEntry entry) {
-        String path = entry.getName();
-        return !entry.isDirectory() && path.endsWith(".class") ? path.substring(0, path.length() - 6) : null;
-    }
-
     private Map<String, byte[]> gatherPatches(File clean, File dirty) throws IOException {
         Map<String, byte[]> binpatches = new TreeMap<>();
         try (ZipFile zclean = new ZipFile(clean);
-             ZipFile zdirty = new ZipFile(dirty)) {
+            ZipFile zdirty = new ZipFile(dirty)){
 
             Map<String, Set<String>> entries = new HashMap<>();
-            Stream.concat(zclean.stream(), zdirty.stream()).map(Generator::getClassNameFromEntry).filter(Objects::nonNull).forEach(e -> {
-                String outermostClass = getOutermostClassName(e);
-                entries.computeIfAbsent(outermostClass, k -> new HashSet<>()).add(e);
+            Collections.list(zclean.entries()).stream().map(e -> e.getName()).filter(e -> e.endsWith(".class")).map(e -> e.substring(0, e.length() - 6)).forEach(e -> {
+                int idx = e.indexOf('$');
+                if (idx != -1)
+                    entries.computeIfAbsent(e.substring(0, idx), k -> new HashSet<>()).add(e);
+                else
+                    entries.computeIfAbsent(e, k -> new HashSet<>()).add(e);
+            });
+            Collections.list(zdirty.entries()).stream().map(e -> e.getName()).filter(e -> e.endsWith(".class")).map(e -> e.substring(0, e.length() - 6)).forEach(e -> {
+                int idx = e.indexOf('$');
+                if (idx != -1)
+                    entries.computeIfAbsent(e.substring(0, idx), k -> new HashSet<>()).add(e);
+                else
+                    entries.computeIfAbsent(e, k -> new HashSet<>()).add(e);
             });
 
             log("Creating patches:");
@@ -143,27 +174,51 @@ public class Generator {
             if (includedClasses.isEmpty()) { //No patches, assume full set!
                 for (Map.Entry<String, Set<String>> entry : entries.entrySet()) {
                     String path = entry.getKey();
+                    String srgRoot = m2o.getOrDefault(path, path);
                     for (String cls : entry.getValue()) {
+                        String srg = m2o.get(cls);
+                        if (srg == null) {
+                            int idx = cls.indexOf('$');
+                            if (idx == -1) {
+                                srg = path;
+                            } else {
+                                srg = srgRoot + '$' + cls.substring(idx + 1);
+                            }
+                        }
                         byte[] cleanData = getData(zclean, cls);
                         byte[] dirtyData = getData(zdirty, cls);
                         if (!Arrays.equals(cleanData, dirtyData)) {
-                            byte[] patch = process(path, cleanData, dirtyData);
-                            binpatches.put(path, patch);
+                            byte[] patch = process(cls, srg, cleanData, dirtyData);
+                            if (patch != null)
+                                binpatches.put(toJarName(srg), patch);
                         }
                     }
                 }
             } else {
                 for (String path : includedClasses) {
-                    if (entries.containsKey(path)) {
-                        for (String cls : entries.get(path)) {
+                    String obf = o2m.getOrDefault(path, path);
+                    if (entries.containsKey(obf)) {
+                        for (String cls : entries.get(obf)) {
+                            String srg = m2o.get(cls);
+                            if (srg == null) {
+                                int idx = cls.indexOf('$');
+                                if (idx == -1) {
+                                    srg = path;
+                                } else {
+                                    srg = path + '$' + cls.substring(idx + 1);
+                                }
+                            }
+
                             byte[] cleanData = getData(zclean, cls);
                             byte[] dirtyData = getData(zdirty, cls);
                             if (!Arrays.equals(cleanData, dirtyData)) {
-                                byte[] patch = process(cls, cleanData, dirtyData);
+                                byte[] patch = process(cls, srg, cleanData, dirtyData);
+                                if (patch != null)
+                                    binpatches.put(toJarName(srg), patch);
                             }
                         }
                     } else {
-                        log("  Failed: no source for patch? " + path + " " + path);
+                        log("  Failed: no source for patch? " + path + " " + obf);
                     }
                 }
             }
@@ -171,11 +226,15 @@ public class Generator {
         return binpatches;
     }
 
+    // public for testing
+    public String toJarName(String original) {
+        return original.replace('/', '.') + ".binpatch";
+    }
+
     private byte[] getData(ZipFile zip, String cls) throws IOException {
         ZipEntry entry = zip.getEntry(cls + ".class");
         return entry == null ? EMPTY_DATA : Util.toByteArray(zip, entry);
     }
-
     // public for testing
     public byte[] createJar(Map<String, byte[]> patches) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -192,6 +251,30 @@ public class Generator {
         return out.toByteArray();
     }
 
+    private byte[] pack200(byte[] data) throws IOException {
+        try (JarInputStream in = new JarInputStream(new ByteArrayInputStream(data));
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Packer packer = Pack200.newPacker();
+
+            SortedMap<String, String> props = packer.properties();
+            props.put(Packer.EFFORT, "9");
+            props.put(Packer.KEEP_FILE_ORDER, Packer.TRUE);
+            props.put(Packer.UNKNOWN_ATTRIBUTE, Packer.PASS);
+
+            final PrintStream err = new PrintStream(System.err);
+            System.setErr(new PrintStream(NULL));
+            packer.pack(in, out);
+            System.setErr(err);
+
+            out.flush();
+
+            byte[] ret = out.toByteArray();
+            log("Pack: " + data.length + " -> " + ret.length);
+            return ret;
+        }
+    }
+
     // public for testing
     public byte[] lzma(byte[] data) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -204,16 +287,15 @@ public class Generator {
         return ret;
     }
 
-    private byte[] process(String path, byte[] clean, byte[] dirty) throws IOException {
-        if (debug) {
-            log("  Processing " + path);
-        }
+    private byte[] process(String obf, String srg, byte[] clean, byte[] dirty) throws IOException {
+        if (srg.equals(obf))
+            log("  Processing " + srg);
+        else
+            log("  Processing " + srg + "(" + obf + ")");
 
-        Patch patch = Patch.from(path, path, clean, dirty, this.minimizePatches);
-        if (debug) {
-            log("    Clean: " + Integer.toHexString(patch.checksum(clean)) + " Dirty: " + Integer.toHexString(patch.checksum(dirty)));
-        }
-        return patch.toBytes(false);
+        Patch patch = Patch.from(obf, srg, clean, dirty, this.minimizePatches);
+        log("    Clean: " + Integer.toHexString(patch.checksum(clean)) + " Dirty: " + Integer.toHexString(patch.checksum(dirty)));
+        return patch.toBytes(this.legacy);
     }
 
     private void log(String message) {
@@ -231,4 +313,10 @@ public class Generator {
             this.prefix = prefix;
         }
     }
+
+    private static OutputStream NULL = new OutputStream() {
+        @Override
+        public void write(int b) throws IOException {
+        }
+    };
 }
