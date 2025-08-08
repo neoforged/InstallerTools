@@ -18,8 +18,6 @@
  */
 package net.neoforged.installertools.util;
 
-import net.neoforged.installertools.McpData;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;

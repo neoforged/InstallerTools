@@ -6,8 +6,6 @@ package net.neoforged.binarypatcher;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -24,8 +22,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Pack200;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -47,8 +43,6 @@ public class Patcher {
     private final File output;
     private boolean keepData = false;
     private boolean patchedOnly = false;
-    private boolean pack200 = false;
-    private boolean legacy = false;
 
     public Patcher(File clean, File output) {
         this.clean = clean;
@@ -65,24 +59,6 @@ public class Patcher {
         return this;
     }
 
-    public Patcher pack200() {
-        return pack200(true);
-    }
-
-    public Patcher pack200(boolean value) {
-        this.pack200 = value;
-        return this;
-    }
-
-    public Patcher legacy() {
-        return this.legacy(true);
-    }
-
-    public Patcher legacy(boolean value) {
-        this.legacy = value;
-        return this;
-    }
-
     // This can be called multiple times, if patchsets are built on top of eachother.
     // They will be applied in the order that the patch files were loaded.
     public void loadPatches(File file, String prefix) throws IOException {
@@ -92,14 +68,6 @@ public class Patcher {
         try (InputStream input = new FileInputStream(file)) {
             InputStream stream = new LZMAInputStream(new BufferedInputStream(input));
 
-            if (pack200) {
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                try (JarOutputStream jos = new JarOutputStream(bos)) {
-                    Pack200.newUnpacker().unpack(stream, jos);
-                }
-                stream = new ByteArrayInputStream(bos.toByteArray());
-            }
-
             JarInputStream jar = new JarInputStream(new BufferedInputStream(stream));
 
             JarEntry entry;
@@ -107,7 +75,7 @@ public class Patcher {
                 String name = entry.getName();
                 if (name.endsWith(".binpatch") && (prefix == null || name.startsWith(prefix + '/'))) {
                     debug("  Reading patch " + entry.getName());
-                    Patch patch = Patch.from(jar, this.legacy);
+                    Patch patch = Patch.from(jar, false);
                     debug("    Checksum: " + Integer.toHexString(patch.checksum) + " Exists: " + patch.exists);
                     patches.computeIfAbsent(patch.obf, k -> new ArrayList<>()).add(patch);
                 }

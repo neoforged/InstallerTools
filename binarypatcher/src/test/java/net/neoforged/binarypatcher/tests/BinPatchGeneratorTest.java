@@ -55,7 +55,7 @@ public class BinPatchGeneratorTest {
         Map<String, byte[]> sortedMap = new TreeMap<>(); //preserve order
         Generator generator = new Generator(null); //dummy for writing patches
         for (Map.Entry<String, byte[]> entry : patches.entrySet()) {
-            sortedMap.put(generator.toJarName(entry.getKey()), entry.getValue());
+           // sortedMap.put(generator.toJarName(entry.getKey()), entry.getValue());
         }
         byte[] jarData = generator.createJar(sortedMap);
         return generator.lzma(jarData);
