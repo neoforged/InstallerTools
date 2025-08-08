@@ -43,7 +43,7 @@ public enum HashFunction {
     }
 
     public String getExtension() {
-         return this.name().toLowerCase(Locale.ENGLISH);
+        return this.name().toLowerCase(Locale.ENGLISH);
     }
 
     public MessageDigest get() {
@@ -107,7 +107,7 @@ public enum HashFunction {
         return pad(new BigInteger(1, get().digest(data)).toString(16));
     }
 
-    public  String pad(String hash) {
+    public String pad(String hash) {
         return (pad + hash).substring(hash.length());
     }
 }
