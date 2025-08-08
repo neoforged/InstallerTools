@@ -65,6 +65,12 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+/**
+ * This task takes the released Minecraft artifacts (client jar, server jar, official mappings), as well as
+ * the NeoForm and NeoForge release artifacts (NeoForm parameter mappings, NeoForge binary patches), and processes
+ * them to a point to get a usable Minecraft jar for either generating binary patches (when no binary patches are
+ * given to this task), or for use when playing NeoForge in production.
+ */
 public class ProcessMinecraftJar extends Task {
     static final long STABLE_TIMESTAMP = 0x386D4380; //01/01/2000 00:00:00 java 8 breaks when using 0.
 
