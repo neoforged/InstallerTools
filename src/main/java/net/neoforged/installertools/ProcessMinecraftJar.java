@@ -25,6 +25,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import net.neoforged.accesstransformer.api.AccessTransformerEngine;
 import net.neoforged.art.api.IdentifierFixerConfig;
 import net.neoforged.art.api.Renamer;
 import net.neoforged.art.api.SignatureStripperConfig;
@@ -33,6 +34,11 @@ import net.neoforged.art.api.Transformer;
 import net.neoforged.binarypatcher.Patch;
 import net.neoforged.srgutils.IMappingFile;
 import org.jetbrains.annotations.Nullable;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.ClassNode;
 import org.tukaani.xz.LZMAInputStream;
 
 import java.io.BufferedInputStream;
@@ -56,9 +62,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -72,6 +81,10 @@ import java.util.zip.ZipOutputStream;
  * given to this task), or for use when playing NeoForge in production.
  */
 public class ProcessMinecraftJar extends Task {
+
+    private static final String DIST_SERVER = "server";
+    private static final String DIST_CLIENT = "client";
+
     static final long STABLE_TIMESTAMP = 0x386D4380; //01/01/2000 00:00:00 java 8 breaks when using 0.
 
     public static final long NEW_ENTRY_ZIPTIME = 628041600000L;
@@ -83,13 +96,16 @@ public class ProcessMinecraftJar extends Task {
         long start = System.nanoTime();
 
         OptionParser parser = new OptionParser();
-        OptionSpec<File> inputArg = parser.accepts("input", "The original Minecraft jar. Either a server or client jar can be given.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> inputArg = parser.accepts("input", "The original Minecraft jar. Either a server or client jar can be given. You can also pass both client and server to create a joined distribution.").withRequiredArg().ofType(File.class);
         OptionSpec<File> inputMappingsArg = parser.accepts("input-mappings", "The official Mappings text-file matching the input jar.").withRequiredArg().ofType(File.class);
         OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names, or a LZMA compressed NeoForm mappings file.").withOptionalArg().ofType(File.class);
         OptionSpec<File> outputArg = parser.accepts("output", "Where the resulting processed jar is written to.").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withOptionalArg().ofType(File.class);
         OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply. Multiple can be specified and will be applied in-order.").withOptionalArg().ofType(File.class);
         OptionSpec<Void> noModManifest = parser.accepts("no-mod-manifest", "Disables adding a neoforge.mods.toml mod manifest");
+        OptionSpec<File> accessTransformerArg = parser.accepts("access-transformer", "Apply an access transformer.").withOptionalArg().ofType(File.class);
+        OptionSpec<String> iiAnnotationMarkerArg = parser.accepts("interface-injection-marker", "The name (binary representation) of an annotation to use as a marker for injected interfaces.").withOptionalArg().ofType(String.class);
+        OptionSpec<File> iiDataFilesArg = parser.accepts("interface-injection-data", "The paths to read interface injection JSON files from.").withOptionalArg().ofType(File.class);
 
         OptionSet options;
         try {
@@ -100,21 +116,44 @@ public class ProcessMinecraftJar extends Task {
             return;
         }
 
-        File inputFile = options.valueOf(inputArg);
+        List<File> inputFiles = options.valuesOf(inputArg);
+        if (inputFiles.isEmpty() || inputFiles.size() > 2) {
+            System.err.println("Can only pass one or two --input arguments.");
+            System.exit(1);
+            return;
+        }
+        File inputFile = inputFiles.get(0);
+        File mergeInputFile = inputFiles.size() > 1 ? inputFiles.get(1) : null;
         File inputMappingsFile = options.valueOf(inputMappingsArg);
 
         File librariesFolder = options.valueOf(outputLibrariesArg);
         File outputFile = options.valueOf(outputArg);
         File neoformDataFile = options.valueOf(neoformDataArg);
         List<File> patchesArchiveFiles = options.valuesOf(patchesArchiveArg);
+        List<File> accessTransformerFiles = options.valuesOf(accessTransformerArg);
+        String iiAnnotationMarker = options.valueOf(iiAnnotationMarkerArg);
+        List<File> iiDataFiles = options.valuesOf(iiDataFilesArg);
+
+        AccessTransformerEngine accessTransformers = null;
+        if (!accessTransformerFiles.isEmpty()) {
+            accessTransformers = loadAccessTransformers(accessTransformerFiles);
+        }
+        InterfaceInjection interfaceInjection = null;
+        if (!iiDataFiles.isEmpty()) {
+            long iiStart = System.nanoTime();
+            interfaceInjection = new InterfaceInjection(iiDataFiles, iiAnnotationMarker);
+            logElapsed("load interface injection data", iiStart);
+        }
 
         boolean addModManifest = !options.has(noModManifest);
 
-        executorService = Executors.newWorkStealingPool();
+        executorService = ForkJoinPool.commonPool();
         try {
-            processZip(inputFile, inputMappingsFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
+            processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest, accessTransformers, interfaceInjection);
         } finally {
-            executorService.shutdown();
+            if (executorService != ForkJoinPool.commonPool()) {
+                executorService.shutdown();
+            }
             executorService = null;
         }
 
@@ -123,25 +162,42 @@ public class ProcessMinecraftJar extends Task {
 
     private void processZip(File inputFile,
                             File inputMappingsFile,
+                            @Nullable File mergeInputFile,
                             File outputFile,
                             @Nullable File librariesFolder,
                             @Nullable File neoformDataFile,
                             List<File> patchesArchiveFiles,
-                            boolean addModManifest) {
+                            boolean addModManifest,
+                            @Nullable
+                            AccessTransformerEngine accessTransformers,
+                            @Nullable
+                            InterfaceInjection interfaceInjection) {
         CompletableFuture<IMappingFile> mappings = supplyAsync("load mappings", () -> loadMappings(inputMappingsFile));
         if (neoformDataFile != null) {
             CompletableFuture<IMappingFile> parameterMappings = supplyAsync("load parameter mappings", () -> loadNeoformMappings(neoformDataFile));
             mappings = mappings.thenCombineAsync(parameterMappings, this::mergeMappings);
         }
-        CompletableFuture<Map<String, InputFileEntry>> outputEntries = supplyAsync("load input zip", () -> loadInputZip(inputFile, librariesFolder));
+        CompletableFuture<Map<String, InputFileEntry>> outputEntries;
+        if (mergeInputFile == null) {
+            outputEntries = supplyAsync("load input zip", () -> loadInputZip(inputFile, librariesFolder));
+        } else {
+            CompletableFuture<Map<String, InputFileEntry>> inputEntriesFuture = supplyAsync("load " + inputFile.getName(), () -> loadInputZip(inputFile, librariesFolder));
+            CompletableFuture<Map<String, InputFileEntry>> mergeInputEntriesFuture = supplyAsync("load " + mergeInputFile.getName(), () -> loadInputZip(mergeInputFile, librariesFolder));
 
-        outputEntries = deobfuscateJarAsync(outputEntries, mappings);
+            outputEntries = inputEntriesFuture.thenCombine(mergeInputEntriesFuture, this::merge);
+        }
+
+        outputEntries = allOfThenCompose(outputEntries, mappings, this::deobfuscateJar);
 
         // If patches are supplied, apply them
         if (!patchesArchiveFiles.isEmpty()) {
             CompletableFuture<List<Patch>> patches = loadPatchLists(patchesArchiveFiles);
 
             outputEntries = outputEntries.thenCombineAsync(patches, this::applyPatches);
+        }
+
+        if (accessTransformers != null || interfaceInjection != null) {
+            outputEntries = outputEntries.thenCompose(entries -> applyDevTransforms(entries, accessTransformers, interfaceInjection));
         }
 
         CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> {
@@ -166,6 +222,50 @@ public class ProcessMinecraftJar extends Task {
             }
             throw new RuntimeException(e.getCause());
         }
+    }
+
+    private CompletableFuture<Map<String, InputFileEntry>> applyDevTransforms(Map<String, InputFileEntry> entries,
+                                                                              @Nullable AccessTransformerEngine accessTransformers,
+                                                                              @Nullable InterfaceInjection interfaceInjection) {
+        long start = System.nanoTime();
+
+        // Find all classes that are targeted by access transformers
+        List<CompletableFuture<?>> futures = new ArrayList<>();
+        for (Map.Entry<String, InputFileEntry> entry : entries.entrySet()) {
+            if (entry.getKey().endsWith(".class")) {
+                Type classType = Type.getObjectType(entry.getKey().substring(0, entry.getKey().length() - 6));
+                if (accessTransformers != null && accessTransformers.containsClassTarget(classType)
+                        || interfaceInjection != null && interfaceInjection.containsClassTarget(classType)) {
+                    futures.add(CompletableFuture.runAsync(
+                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection)),
+                            executorService
+                    ));
+                }
+            }
+        }
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenApply(unused -> {
+                    logElapsed("apply dev transforms", start);
+                    return entries;
+                });
+    }
+
+    private InputFileEntry applyAccessTransformers(InputFileEntry entry,
+                                                   Type type,
+                                                   @Nullable AccessTransformerEngine accessTransformers,
+                                                   @Nullable InterfaceInjection interfaceInjection) {
+        ClassReader classReader = new ClassReader(entry.getContent());
+        ClassNode cn = new ClassNode();
+        classReader.accept(cn, 0);
+        if (accessTransformers != null) {
+            accessTransformers.transform(cn, type);
+        }
+        if (interfaceInjection != null) {
+            interfaceInjection.transform(cn, type);
+        }
+        ClassWriter cw = new ClassWriter(Opcodes.ASM9);
+        cn.accept(cw);
+        return new InputFileEntry(entry.getName(), entry.getLastModified(), cw.toByteArray());
     }
 
     private static String getMinecraftVersion(Map<String, InputFileEntry> entries) {
@@ -383,6 +483,19 @@ public class ProcessMinecraftJar extends Task {
         return zf;
     }
 
+    private static String detectDistribution(Map<String, InputFileEntry> entries) throws IOException {
+        boolean hasClientEntrypoint = entries.containsKey("net/minecraft/client/main/Main.class");
+        boolean hasServerEntrypoint = entries.containsKey("net/minecraft/server/Main.class");
+
+        if (!hasClientEntrypoint && hasServerEntrypoint) {
+            return DIST_SERVER;
+        } else if (hasClientEntrypoint) {
+            return DIST_CLIENT;
+        } else {
+            throw new IOException("Input has neither client nor server entrypoint.");
+        }
+    }
+
     private IMappingFile loadNeoformMappings(File neoformDataFile) {
         // Support both the version where we have to read the NeoForm file, and the version where we get the mapping file directly.
         if (neoformDataFile.getName().endsWith(".lzma")) {
@@ -412,12 +525,6 @@ public class ProcessMinecraftJar extends Task {
         } catch (IOException e) {
             throw new UncheckedIOException("Unexpected I/O exception when reading NeoForm data file " + neoformDataFile, e);
         }
-    }
-
-    private CompletableFuture<Map<String, InputFileEntry>> deobfuscateJarAsync(CompletableFuture<Map<String, InputFileEntry>> entries,
-                                                                               CompletableFuture<IMappingFile> mappings) {
-        return CompletableFuture.allOf(entries, mappings)
-                .thenCompose(unused -> deobfuscateJar(entries.join(), mappings.join()));
     }
 
     private CompletableFuture<Map<String, InputFileEntry>> deobfuscateJar(Map<String, InputFileEntry> inputEntries, IMappingFile mappings) {
@@ -457,6 +564,82 @@ public class ProcessMinecraftJar extends Task {
                 });
     }
 
+    /**
+     * Merges a client and server Jar file.
+     *
+     * <p>Note that this applies a heuristic that assumes files are not *different* between two versions,
+     * and if they are, the client version is used.
+     */
+    private Map<String, InputFileEntry> merge(Map<String, InputFileEntry> entriesLeft, Map<String, InputFileEntry> entriesRight) {
+        long start = System.nanoTime();
+
+        try {
+            String distLeft = detectDistribution(entriesLeft);
+            String distRight = detectDistribution(entriesRight);
+            if (distLeft.equals(distRight)) {
+                throw new IOException("Cannot create a merged jar from the same two distributions: " + distLeft + ", " + distRight);
+            }
+
+            Map<String, InputFileEntry> serverEntries = DIST_SERVER.equals(distLeft) ? entriesLeft : entriesRight;
+            Map<String, InputFileEntry> clientEntries = DIST_CLIENT.equals(distLeft) ? entriesLeft : entriesRight;
+
+            // We simply take files from left/right, while recording this in the MANIFEST, which we replace
+            Manifest mergedManifest = new Manifest();
+            mergedManifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            mergedManifest.getMainAttributes().putValue("Minecraft-Dists", DIST_CLIENT + " " + DIST_SERVER);
+            Attributes clientOnlyAttrs = new Attributes(1);
+            clientOnlyAttrs.putValue("Minecraft-Dist", DIST_CLIENT);
+            Attributes serverOnlyAttrs = new Attributes(1);
+            serverOnlyAttrs.putValue("Minecraft-Dist", DIST_SERVER);
+
+            // Detect client-only files
+            int clientExclusiveFiles = 0;
+            for (Map.Entry<String, InputFileEntry> entry : clientEntries.entrySet()) {
+                InputFileEntry serverEntry = serverEntries.remove(entry.getKey());
+                if (serverEntry == null) {
+                    mergedManifest.getEntries().put(entry.getKey(), clientOnlyAttrs);
+                    clientExclusiveFiles++;
+                }
+            }
+
+            // Merge over server-only files
+            int serverExclusiveFiles = serverEntries.size();
+            clientEntries.putAll(serverEntries);
+            for (String serverKey : serverEntries.keySet()) {
+                mergedManifest.getEntries().put(serverKey, serverOnlyAttrs);
+            }
+
+            log("Merged " + clientEntries.size() + " entries (" + clientExclusiveFiles + " client-only, " + serverExclusiveFiles + " server-only)");
+
+            logElapsed("merge jars", start);
+
+            // Replace the MANIFEST.MF
+            ByteArrayOutputStream manifestOut = new ByteArrayOutputStream();
+            mergedManifest.write(manifestOut);
+            clientEntries.put("META-INF/MANIFEST.MF", new InputFileEntry("META-INF/MANIFEST.MF", STABLE_TIMESTAMP, manifestOut.toByteArray()));
+
+            return clientEntries;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to merge jars", e);
+        }
+    }
+
+    private static AccessTransformerEngine loadAccessTransformers(List<File> accessTransformerFiles) {
+        AccessTransformerEngine accessTransformers;
+        long start = System.nanoTime();
+        accessTransformers = AccessTransformerEngine.newEngine();
+        // Load access transformers
+        for (File accessTransformer : accessTransformerFiles) {
+            try {
+                accessTransformers.loadATFromPath(accessTransformer.toPath());
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to load access transformer file " + accessTransformer, e);
+            }
+        }
+        logElapsed("load access transformers", start);
+        return accessTransformers;
+    }
+
     private static class InputFileEntry {
         private final String name;
         private final long lastModified;
@@ -485,13 +668,12 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    enum InputDist {
-        CLIENT,
-        SERVER
-    }
-
     private <T> CompletableFuture<T> supplyAsync(String task, ThrowingSupplier<T> callable) {
         return CompletableFuture.supplyAsync(wrapTask(task, callable), executorService);
+    }
+
+    private <T1, T2, R> CompletableFuture<R> allOfThenCompose(CompletableFuture<T1> f1, CompletableFuture<T2> f2, BiFunction<T1, T2, CompletableFuture<R>> combiner) {
+        return CompletableFuture.allOf(f1, f2).thenCompose(unused -> combiner.apply(f1.join(), f2.join()));
     }
 
     private static <T> Supplier<T> wrapTask(String task, ThrowingSupplier<T> callable) {

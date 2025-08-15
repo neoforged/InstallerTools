@@ -18,6 +18,7 @@
  */
 package net.neoforged.installertools;
 
+import net.neoforged.binarypatcher.Util;
 import net.neoforged.installertools.util.HashFunction;
 import net.neoforged.installertools.util.Utils;
 import org.jetbrains.annotations.Nullable;
@@ -49,10 +50,12 @@ import java.util.zip.ZipFile;
 final class BundleInfo {
     private final List<BundledFile> libraries;
     private final List<BundledFile> versions;
+    private final String mainClass;
 
-    private BundleInfo(List<BundledFile> libraries, List<BundledFile> versions) {
+    private BundleInfo(List<BundledFile> libraries, List<BundledFile> versions, String mainClass) {
         this.libraries = libraries;
         this.versions = versions;
+        this.mainClass = mainClass;
     }
 
     public List<BundledFile> getLibraries() {
@@ -61,6 +64,10 @@ final class BundleInfo {
 
     public List<BundledFile> getVersions() {
         return versions;
+    }
+
+    public String getMainClass() {
+        return mainClass;
     }
 
     @Nullable
@@ -74,9 +81,15 @@ final class BundleInfo {
             return null;
         }
 
+        ZipEntry mainClassEntry = zf.getEntry("META-INF/main-class");
+        if (mainClassEntry == null) {
+            throw new IOException("Bundle file does not contain expected entry META-INF/main-class");
+        }
+        String mainClass = new String(Util.toByteArray(zf, mainClassEntry), StandardCharsets.ISO_8859_1).trim();
+
         List<BundledFile> libraries = readFileList(zf, BundledFileType.LIBRARY, "META-INF/libraries.list");
         List<BundledFile> versions = readFileList(zf, BundledFileType.VERSION, "META-INF/versions.list");
-        return new BundleInfo(libraries, versions);
+        return new BundleInfo(libraries, versions, mainClass);
     }
 
     public File extractAndReturnPrimaryJar(ZipFile zf, @Nullable File librariesFolder) throws IOException {
@@ -154,7 +167,7 @@ final class BundleInfo {
         return primaryJarEntry;
     }
 
-    private static Manifest readManifest(ZipFile zf) throws IOException {
+    static Manifest readManifest(ZipFile zf) throws IOException {
         ZipEntry entry = zf.getEntry(JarFile.MANIFEST_NAME);
         if (entry == null) {
             return null;
