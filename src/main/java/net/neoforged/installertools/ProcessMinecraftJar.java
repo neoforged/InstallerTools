@@ -25,6 +25,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import net.neoforged.accesstransformer.api.AccessTransformerEngine;
 import net.neoforged.art.api.IdentifierFixerConfig;
 import net.neoforged.art.api.Renamer;
 import net.neoforged.art.api.SignatureStripperConfig;
@@ -35,6 +36,7 @@ import net.neoforged.srgutils.IMappingFile;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.tukaani.xz.LZMAInputStream;
 
@@ -54,6 +56,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -99,6 +102,9 @@ public class ProcessMinecraftJar extends Task {
         OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withOptionalArg().ofType(File.class);
         OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply. Multiple can be specified and will be applied in-order.").withOptionalArg().ofType(File.class);
         OptionSpec<Void> noModManifest = parser.accepts("no-mod-manifest", "Disables adding a neoforge.mods.toml mod manifest");
+        OptionSpec<File> accessTransformerArg = parser.accepts("access-transformer", "Apply an access transformer.").withOptionalArg().ofType(File.class);
+        OptionSpec<String> iiAnnotationMarkerArg = parser.accepts("interface-injection-marker", "The name (binary representation) of an annotation to use as a marker for injected interfaces.").withOptionalArg().ofType(String.class);
+        OptionSpec<File> iiDataFilesArg = parser.accepts("interface-injection-data", "The paths to read interface injection JSON files from.").withOptionalArg().ofType(File.class);
 
         OptionSet options;
         try {
@@ -123,10 +129,24 @@ public class ProcessMinecraftJar extends Task {
         File outputFile = options.valueOf(outputArg);
         File neoformDataFile = options.valueOf(neoformDataArg);
         List<File> patchesArchiveFiles = options.valuesOf(patchesArchiveArg);
+        List<File> accessTransformerFiles = options.valuesOf(accessTransformerArg);
+        String iiAnnotationMarker = options.valueOf(iiAnnotationMarkerArg);
+        List<File> iiDataFiles = options.valuesOf(iiDataFilesArg);
+
+        AccessTransformerEngine accessTransformers = null;
+        if (!accessTransformerFiles.isEmpty()) {
+            accessTransformers = loadAccessTransformers(accessTransformerFiles);
+        }
+        InterfaceInjection interfaceInjection = null;
+        if (!iiDataFiles.isEmpty()) {
+            long iiStart = System.nanoTime();
+            interfaceInjection = new InterfaceInjection(iiDataFiles, iiAnnotationMarker);
+            logElapsed("load interface injection data", iiStart);
+        }
 
         boolean addModManifest = !options.has(noModManifest);
 
-        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
+        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest, accessTransformers, interfaceInjection);
 
         logElapsed("overall work", start);
     }
@@ -139,7 +159,11 @@ public class ProcessMinecraftJar extends Task {
                             @Nullable File librariesFolder,
                             @Nullable File neoformDataFile,
                             List<File> patchesArchiveFiles,
-                            boolean addModManifest) {
+                            boolean addModManifest,
+                            @Nullable
+                            AccessTransformerEngine accessTransformers,
+                            @Nullable
+                            InterfaceInjection interfaceInjection) {
 
         CompletableFuture<Map<String, InputFileEntry>> outputEntries;
         if (mergeInputFile == null) {
@@ -165,6 +189,10 @@ public class ProcessMinecraftJar extends Task {
             CompletableFuture<List<Patch>> patches = loadPatchLists(patchesArchiveFiles);
 
             outputEntries = outputEntries.thenCombineAsync(patches, this::applyPatches);
+        }
+
+        if (accessTransformers != null || interfaceInjection != null) {
+            outputEntries = outputEntries.thenCompose(entries -> applyDevTransforms(entries, accessTransformers, interfaceInjection));
         }
 
         CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> {
@@ -199,6 +227,61 @@ public class ProcessMinecraftJar extends Task {
         ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         classNode.accept(writer);
         return new InputFileEntry(entry.getName(), entry.getLastModified(), writer.toByteArray());
+    }
+
+    private CompletableFuture<Map<String, InputFileEntry>> applyDevTransforms(Map<String, InputFileEntry> entries,
+                                                                              @Nullable AccessTransformerEngine accessTransformers,
+                                                                              @Nullable InterfaceInjection interfaceInjection) {
+        long start = System.nanoTime();
+
+        // Find all classes that are targeted by access transformers
+        List<CompletableFuture<?>> futures = new ArrayList<>();
+        for (Map.Entry<String, InputFileEntry> entry : entries.entrySet()) {
+            if (entry.getKey().endsWith(".class")) {
+                Type classType = Type.getObjectType(entry.getKey().substring(0, entry.getKey().length() - 6));
+                if (accessTransformers != null && accessTransformers.containsClassTarget(classType)
+                        || interfaceInjection != null && interfaceInjection.containsClassTarget(classType)) {
+                    futures.add(CompletableFuture.runAsync(
+                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection))
+                    ));
+                }
+            }
+        }
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenApply(unused -> {
+                    logElapsed("apply dev transforms", start);
+                    return entries;
+                });
+    }
+
+    private InputFileEntry applyAccessTransformers(InputFileEntry entry,
+                                                   Type type,
+                                                   @Nullable AccessTransformerEngine accessTransformers,
+                                                   @Nullable InterfaceInjection interfaceInjection) {
+        return applyClassTransform(entry, classNode -> {
+            if (accessTransformers != null) {
+                accessTransformers.transform(classNode, type);
+            }
+            if (interfaceInjection != null) {
+                interfaceInjection.transform(classNode, type);
+            }
+        });
+    }
+
+    private static AccessTransformerEngine loadAccessTransformers(List<File> accessTransformerFiles) {
+        AccessTransformerEngine accessTransformers;
+        long start = System.nanoTime();
+        accessTransformers = AccessTransformerEngine.newEngine();
+        // Load access transformers
+        for (File accessTransformer : accessTransformerFiles) {
+            try {
+                accessTransformers.loadATFromPath(accessTransformer.toPath());
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to load access transformer file " + accessTransformer, e);
+            }
+        }
+        logElapsed("load access transformers", start);
+        return accessTransformers;
     }
 
     private static String getMinecraftVersion(Map<String, InputFileEntry> entries) {
@@ -467,6 +550,7 @@ public class ProcessMinecraftJar extends Task {
         // TODO: Log harmonization
         builder.add(Transformer.renamerFactory(mappings, true));
         builder.add(Transformer.parameterAnnotationFixerFactory());
+        builder.add(Transformer.parameterFinalFlagRemoverFactory());
         builder.add(Transformer.recordFixerFactory());
         builder.add(Transformer.identifierFixerFactory(IdentifierFixerConfig.ALL));
         builder.add(Transformer.sourceFixerFactory(SourceFixerConfig.JAVA));

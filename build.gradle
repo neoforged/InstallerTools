@@ -48,6 +48,7 @@ dependencies {
     implementation(libs.asm.commons)
     implementation(libs.xz)
     implementation(libs.xdelta)
+    implementation(libs.at)
     implementation project(':cli-utils')
     implementation project(':binarypatcher')
 
