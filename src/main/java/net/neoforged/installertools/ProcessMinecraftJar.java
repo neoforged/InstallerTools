@@ -57,6 +57,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -65,6 +66,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
@@ -254,18 +256,24 @@ public class ProcessMinecraftJar extends Task {
                                                    Type type,
                                                    @Nullable AccessTransformerEngine accessTransformers,
                                                    @Nullable InterfaceInjection interfaceInjection) {
+        return applyClassTransform(entry, classNode -> {
+            if (accessTransformers != null) {
+                accessTransformers.transform(classNode, type);
+            }
+            if (interfaceInjection != null) {
+                interfaceInjection.transform(classNode, type);
+            }
+        });
+    }
+
+    private static InputFileEntry applyClassTransform(InputFileEntry entry, Consumer<ClassNode> transformer) {
         ClassReader classReader = new ClassReader(entry.getContent());
-        ClassNode cn = new ClassNode();
-        classReader.accept(cn, 0);
-        if (accessTransformers != null) {
-            accessTransformers.transform(cn, type);
-        }
-        if (interfaceInjection != null) {
-            interfaceInjection.transform(cn, type);
-        }
-        ClassWriter cw = new ClassWriter(Opcodes.ASM9);
-        cn.accept(cw);
-        return new InputFileEntry(entry.getName(), entry.getLastModified(), cw.toByteArray());
+        ClassNode classNode = new ClassNode();
+        classReader.accept(classNode, 0);
+        transformer.accept(classNode);
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        classNode.accept(writer);
+        return new InputFileEntry(entry.getName(), entry.getLastModified(), writer.toByteArray());
     }
 
     private static String getMinecraftVersion(Map<String, InputFileEntry> entries) {
@@ -534,6 +542,7 @@ public class ProcessMinecraftJar extends Task {
         // TODO: Log harmonization
         builder.add(Transformer.renamerFactory(mappings, true));
         builder.add(Transformer.parameterAnnotationFixerFactory());
+        builder.add(Transformer.parameterFinalFlagRemoverFactory());
         builder.add(Transformer.recordFixerFactory());
         builder.add(Transformer.identifierFixerFactory(IdentifierFixerConfig.ALL));
         builder.add(Transformer.sourceFixerFactory(SourceFixerConfig.JAVA));
@@ -599,14 +608,16 @@ public class ProcessMinecraftJar extends Task {
                 if (serverEntry == null) {
                     mergedManifest.getEntries().put(entry.getKey(), clientOnlyAttrs);
                     clientExclusiveFiles++;
+                    addSideAnnotation(entry, DIST_CLIENT);
                 }
             }
 
             // Merge over server-only files
             int serverExclusiveFiles = serverEntries.size();
             clientEntries.putAll(serverEntries);
-            for (String serverKey : serverEntries.keySet()) {
-                mergedManifest.getEntries().put(serverKey, serverOnlyAttrs);
+            for (Map.Entry<String, InputFileEntry> entry : serverEntries.entrySet()) {
+                mergedManifest.getEntries().put(entry.getKey(), serverOnlyAttrs);
+                addSideAnnotation(entry, DIST_SERVER);
             }
 
             log("Merged " + clientEntries.size() + " entries (" + clientExclusiveFiles + " client-only, " + serverExclusiveFiles + " server-only)");
@@ -622,6 +633,17 @@ public class ProcessMinecraftJar extends Task {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to merge jars", e);
         }
+    }
+
+    private void addSideAnnotation(Map.Entry<String, InputFileEntry> entry, String distClient) {
+        if (!entry.getKey().endsWith(".class")) {
+            return;
+        }
+
+        entry.setValue(applyClassTransform(entry.getValue(), classNode -> {
+            classNode.visitAnnotation("Lnet/neoforged/api/distmarker/OnlyIn;", true)
+                    .visitEnum("value", "Lnet/neoforged/api/distmarker/Dist;", distClient.toUpperCase(Locale.ROOT));
+        }));
     }
 
     private static AccessTransformerEngine loadAccessTransformers(List<File> accessTransformerFiles) {
