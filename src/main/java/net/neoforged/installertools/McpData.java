@@ -69,62 +69,38 @@ public class McpData extends Task {
                 error("Input does not exist: " + input);
 
             try (ZipFile zip = new ZipFile(input)) {
-                ZipEntry config = zip.getEntry("config.json");
-                if (config == null)
-                    error("Input zip file invalid, missing 'config.json' entry");
+                String name = readDataEntry(zip, key);
+                if (name.endsWith("/")) {
+                    if (!output.mkdirs())
+                        error("Failed to create output directory: " + output);
 
-                try (InputStream cfgStream = zip.getInputStream(config)) {
-                    McpConfig cfg = ConsoleTool.GSON.fromJson(new InputStreamReader(zip.getInputStream(config)), McpConfig.class);
-                    if (cfg.data == null)
-                        error("Invalid mcp config, missing data map");
+                    Enumeration<? extends ZipEntry> entries = zip.entries();
+                    while (entries.hasMoreElements()) {
+                        ZipEntry entry = entries.nextElement();
+                        if (!entry.getName().startsWith(name) || entry.isDirectory())
+                            continue;
 
-                    String[] pts = key.split("\\.");
-                    Map<String, Object> level = cfg.data;
-                    for (int x = 0; x < pts.length - 1; x++) {
-                        Object entry = level.get(pts[x]);
-                        if (!(entry instanceof Map))
-                            error("Config missing " + key + " data entry");
-                        level = (Map<String, Object>)entry;
-                    }
-
-                    Object value = level.get(pts[pts.length - 1]);
-                    if (!(value instanceof String))
-                        error("Config missing " + key + " data entry");
-
-                    String name = (String)value;
-                    if (name.endsWith("/")) {
-                        if (!output.mkdirs())
+                        File target = new File(output, entry.getName().substring(name.length()));
+                        if (!target.getParentFile().exists() && !target.getParentFile().mkdirs())
                             error("Failed to create output directory: " + output);
 
-                        Enumeration<? extends ZipEntry> entries = zip.entries();
-                        while (entries.hasMoreElements()) {
-                            ZipEntry entry = entries.nextElement();
-                            if (!entry.getName().startsWith(name) || entry.isDirectory())
-                                continue;
 
-                            File target = new File(output, entry.getName().substring(name.length()));
-                            if (!target.getParentFile().exists() && !target.getParentFile().mkdirs())
-                                error("Failed to create output directory: " + output);
-
-
-                            log("Extracting: " + entry.getName());
-                            try (FileOutputStream _output = new FileOutputStream(target);
-                                InputStream _input = zip.getInputStream(entry)) {
-                                copy(_input, _output);
-                            }
-                        }
-
-                    } else {
-                        ZipEntry entry = zip.getEntry((String)value);
-                        if (entry == null)
-                            error("Invalid zip, missing " + value + " entry");
                         log("Extracting: " + entry.getName());
-                        try (FileOutputStream _output = new FileOutputStream(output);
+                        try (FileOutputStream _output = new FileOutputStream(target);
                             InputStream _input = zip.getInputStream(entry)) {
                             copy(_input, _output);
                         }
                     }
 
+                } else {
+                    ZipEntry entry = zip.getEntry(name);
+                    if (entry == null)
+                        error("Invalid zip, missing " + name + " entry");
+                    log("Extracting: " + entry.getName());
+                    try (FileOutputStream _output = new FileOutputStream(output);
+                        InputStream _input = zip.getInputStream(entry)) {
+                        copy(_input, _output);
+                    }
                 }
             }
 
@@ -133,6 +109,35 @@ public class McpData extends Task {
             parser.printHelpOn(System.out);
             e.printStackTrace();
         }
+    }
+
+    public static String readDataEntry(ZipFile zip, String key) throws IOException {
+        ZipEntry config = zip.getEntry("config.json");
+        if (config == null)
+            throw new IOException("Input zip file invalid, missing 'config.json' entry");
+
+        McpConfig cfg;
+        try (InputStream cfgStream = zip.getInputStream(config)) {
+            cfg = ConsoleTool.GSON.fromJson(new InputStreamReader(cfgStream), McpConfig.class);
+        }
+        if (cfg.data == null) {
+            throw new IOException("Invalid mcp config, missing data map");
+        }
+
+        String[] pts = key.split("\\.");
+        Map<?, ?> level = cfg.data;
+        for (int x = 0; x < pts.length - 1; x++) {
+            Object entry = level.get(pts[x]);
+            if (!(entry instanceof Map<?, ?>))
+                throw new IOException("Config missing " + key + " data entry");
+            level = (Map<?, ?>) entry;
+        }
+
+        Object value = level.get(pts[pts.length - 1]);
+        if (!(value instanceof String))
+            throw new IOException("Config missing " + key + " data entry");
+
+        return (String)value;
     }
 
     private boolean delete(File path) throws IOException {

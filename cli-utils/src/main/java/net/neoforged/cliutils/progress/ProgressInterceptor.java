@@ -4,7 +4,6 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 /**
  * Intercepts {@link ProgressActionType} progress manager actions and redirects them to the {@code manager}.

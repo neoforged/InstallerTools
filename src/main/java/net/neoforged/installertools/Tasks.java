@@ -31,9 +31,10 @@ public enum Tasks {
     DOWNLOAD_MOJMAPS(DownloadMojmaps::new),
     EXTRACT_FILES(ExtractFiles::new),
     BUNDLER_EXTRACT(BundlerExtract::new),
+    PROCESS_MINECRAFT_JAR(ProcessMinecraftJar::new),
     ;
 
-    private Supplier<? extends Task> supplier;
+    private final Supplier<? extends Task> supplier;
 
     private Tasks(Supplier<? extends Task> supplier) {
         this.supplier = supplier;
