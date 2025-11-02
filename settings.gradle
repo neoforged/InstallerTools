@@ -30,8 +30,8 @@ dependencyResolutionManagement {
             library('junit-platform-launcher', 'org.junit.platform:junit-platform-launcher:1.13.1')
             library('assert4j', 'org.assertj:assertj-core:3.27.3')
             bundle('junit', ['junit-engine', 'junit-platform-launcher', 'junit-api', 'junit-params', 'assert4j'])
-            library('art', 'net.neoforged:AutoRenamingTool:2.0.14-remap-manifest')
-            library('at', 'net.neoforged:accesstransformers:11.0.3-jdk8')
+            library('art', 'net.neoforged:AutoRenamingTool:2.0.16')
+            library('at', 'net.neoforged:accesstransformers:13.0.1')
             library('srgutils', 'net.neoforged:srgutils:1.0.0')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:5.0.4')
             library('xz', 'org.tukaani:xz:1.10')
@@ -65,5 +65,3 @@ include(':zipinject')
 include(':problems-api')
 
 rootProject.name = 'installertools'
-
-includeBuild '../AutoRenamingTool'
