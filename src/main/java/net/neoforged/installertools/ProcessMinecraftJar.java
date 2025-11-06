@@ -543,17 +543,17 @@ public class ProcessMinecraftJar extends Task {
                 if (serverEntry == null) {
                     mergedManifest.getEntries().put(entry.getKey(), clientOnlyAttrs);
                     clientExclusiveFiles++;
-                    addSideAnnotation(entry, DIST_CLIENT);
+                    entry.setValue(addSideAnnotation(entry.getValue(), DIST_CLIENT));
                 }
             }
 
-            // Merge over server-only files
+            // Merge over server-only files, after applying side-annotations
             int serverExclusiveFiles = serverEntries.size();
-            clientEntries.putAll(serverEntries);
             for (Map.Entry<String, InputFileEntry> entry : serverEntries.entrySet()) {
                 mergedManifest.getEntries().put(entry.getKey(), serverOnlyAttrs);
-                addSideAnnotation(entry, DIST_SERVER);
+                entry.setValue(addSideAnnotation(entry.getValue(), DIST_SERVER));
             }
+            clientEntries.putAll(serverEntries);
 
             log("Merged " + clientEntries.size() + " entries (" + clientExclusiveFiles + " client-only, " + serverExclusiveFiles + " server-only)");
 
@@ -570,15 +570,22 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    private void addSideAnnotation(Map.Entry<String, InputFileEntry> entry, String distClient) {
-        if (!entry.getKey().endsWith(".class")) {
-            return;
+    private InputFileEntry addSideAnnotation(InputFileEntry entry, String dist) {
+        if (!entry.name.endsWith(".class")) {
+            return entry;
         }
 
-        entry.setValue(applyClassTransform(entry.getValue(), classNode -> {
+        String annotationValue;
+        if (DIST_CLIENT.equals(dist)) {
+            annotationValue = "CLIENT"; // OnlyIn.CLIENT
+        } else {
+            annotationValue = "DEDICATED_SERVER"; // OnlyIn.DEDICATED_SERVER
+        }
+
+        return applyClassTransform(entry, classNode -> {
             classNode.visitAnnotation("Lnet/neoforged/api/distmarker/OnlyIn;", true)
-                    .visitEnum("value", "Lnet/neoforged/api/distmarker/Dist;", distClient.toUpperCase(Locale.ROOT));
-        }));
+                    .visitEnum("value", "Lnet/neoforged/api/distmarker/Dist;", annotationValue);
+        });
     }
 
     private static class InputFileEntry {
