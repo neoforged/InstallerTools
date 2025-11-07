@@ -32,7 +32,7 @@ public class ConsoleTool {
 
     public static void main(String[] args) throws IOException {
         Tasks task = null;
-        String valid = Arrays.stream(Tasks.class.getEnumConstants()).map(Enum::name).collect(Collectors.joining(", "));
+        String valid = Arrays.stream(Tasks.values()).map(Enum::name).collect(Collectors.joining(", "));
         List<String> extra = new ArrayList<>();
 
         for (int x = 0; x < args.length; x++) {
