@@ -54,12 +54,10 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -87,7 +85,6 @@ public class ProcessMinecraftJar extends Task {
     static final long STABLE_TIMESTAMP = 0x386D4380; //01/01/2000 00:00:00 java 8 breaks when using 0.
 
     public static final long NEW_ENTRY_ZIPTIME = 628041600000L;
-    private ExecutorService executorService;
 
     @Override
     public void process(String[] args) throws IOException {
@@ -129,15 +126,7 @@ public class ProcessMinecraftJar extends Task {
 
         boolean addModManifest = !options.has(noModManifest);
 
-        executorService = ForkJoinPool.commonPool();
-        try {
-            processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
-        } finally {
-            if (executorService != ForkJoinPool.commonPool()) {
-                executorService.shutdown();
-            }
-            executorService = null;
-        }
+        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
 
         logElapsed("overall work", start);
     }
@@ -489,7 +478,7 @@ public class ProcessMinecraftJar extends Task {
                 .map(entry -> Transformer.Entry.ofFile(entry.name, entry.lastModified, entry.content))
                 .collect(Collectors.toList());
 
-        return renamer.run(entries, executorService)
+        return renamer.run(entries, ForkJoinPool.commonPool())
                 .thenApply(entryList -> {
                     try {
                         renamer.close();
@@ -617,7 +606,7 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private <T> CompletableFuture<T> supplyAsync(String task, ThrowingSupplier<T> callable) {
-        return CompletableFuture.supplyAsync(wrapTask(task, callable), executorService);
+        return CompletableFuture.supplyAsync(wrapTask(task, callable));
     }
 
     private <T1, T2, R> CompletableFuture<R> allOfThenCompose(CompletableFuture<T1> f1, CompletableFuture<T2> f2, BiFunction<T1, T2, CompletableFuture<R>> combiner) {
