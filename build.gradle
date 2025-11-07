@@ -112,10 +112,4 @@ publishing {
             description = 'A collection of command line tools that are useful for the Forge installer, that are not worth being their own standalone projects.'
         }
     }
-    repositories {
-        maven {
-            name = "project"
-            url = file("repo").toURI().toString()
-        }
-    }
 }
