@@ -42,6 +42,6 @@ public enum Tasks {
 
     @SuppressWarnings("unchecked")
     public <T extends Task> T get() {
-        return (T)supplier.get();
+        return (T) supplier.get();
     }
 }
