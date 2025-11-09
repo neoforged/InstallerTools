@@ -11,10 +11,14 @@ public class SuperinterfaceSignatureConverter {
         new SignatureReader(existingSignature).accept(writer);
 
         for (String iface : addedInterfaces) {
-            writeInterfaceSignature(iface, writer);
+            writeInterfaceSignature(removeWhitespace(iface), writer);
         }
 
         return writer.toString();
+    }
+
+    private static String removeWhitespace(String iface) {
+        return iface.replaceAll("\\s", "");
     }
 
     private static void writeInterfaceSignature(String iface, SignatureWriter writer) {
@@ -54,8 +58,16 @@ public class SuperinterfaceSignatureConverter {
     }
 
     private static void writeTypeArgument(String param, SignatureWriter sw) {
-        // Only handle normal types, intersection types are not supported
-        sw.visitTypeArgument('=');
+        // Wildcards are supported for nested generics, so let's always write them
+        if (param.startsWith("?super")) {
+            sw.visitTypeArgument('-');
+            param = param.substring(6);
+        } else if (param.startsWith("?extends")) {
+            sw.visitTypeArgument('+');
+            param = param.substring(8);
+        } else {
+            sw.visitTypeArgument('=');
+        }
         writeType(param, sw);
     }
 

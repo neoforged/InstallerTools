@@ -15,7 +15,7 @@ class SuperinterfaceSignatureConverterTest {
         "com/example/MyInterface<other.Interface<T>>,Lcom/example/MyInterface<Lother/Interface<TT;>;>;",
         "java/lang/Runnable,Ljava/lang/Runnable;",
         "'java/util/Map$Entry<K,V>','Ljava/util/Map$Entry<TK;TV;>;'",
-        "pkg/Test<List<? extends java.lang.Number>>,Lpkg/Test<Ljava/util/List<+Ljava/lang/Number;>;>;",
+        "pkg/Test<java.util.List<? extends java.lang.Number>>,Lpkg/Test<Ljava/util/List<+Ljava/lang/Number;>;>;",
     })
     void testSingleSuperinterfaceConversion(String input, String expectedSignature) {
         String actual = SuperinterfaceSignatureConverter.convert("Ljava/lang/Object;", java.util.Collections.singletonList(input));
