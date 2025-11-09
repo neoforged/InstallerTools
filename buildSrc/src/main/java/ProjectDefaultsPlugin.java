@@ -1,5 +1,6 @@
 import net.neoforged.gradleutils.GradleUtilsExtension;
 import net.neoforged.gradleutils.PomUtilsExtension;
+import net.neoforged.gradleutils.specs.VersionBranchesSpec;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginExtension;
@@ -28,13 +29,16 @@ public class ProjectDefaultsPlugin implements Plugin<Project> {
         java.getToolchain().getLanguageVersion().set(JavaLanguageVersion.of(8));
 
         var gradleUtilsExtension = project.getExtensions().getByType(GradleUtilsExtension.class);
+        // We need to sign to be able to publish to central
+        gradleUtilsExtension.setupSigning(project, true);
+        gradleUtilsExtension.version(versionSpec -> {
+            versionSpec.branches(VersionBranchesSpec::suffixBranch);
+        });
+
         var projectVersion = gradleUtilsExtension.getVersion();
         project.setVersion(projectVersion);
 
         project.getLogger().lifecycle("{} version: {}", project.getName(), projectVersion);
-
-        // We need to sign to be able to publish to central
-        gradleUtilsExtension.setupSigning(project, true);
 
         var jarTask = project.getTasks().named("jar", Jar.class);
         jarTask.configure(task -> {
