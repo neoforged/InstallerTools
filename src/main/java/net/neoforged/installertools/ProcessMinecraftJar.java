@@ -467,6 +467,7 @@ public class ProcessMinecraftJar extends Task {
         // TODO: Log harmonization
         builder.add(Transformer.renamerFactory(mappings, true));
         builder.add(Transformer.parameterAnnotationFixerFactory());
+        builder.add(Transformer.parameterFinalFlagRemoverFactory());
         builder.add(Transformer.recordFixerFactory());
         builder.add(Transformer.identifierFixerFactory(IdentifierFixerConfig.ALL));
         builder.add(Transformer.sourceFixerFactory(SourceFixerConfig.JAVA));
