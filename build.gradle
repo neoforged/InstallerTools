@@ -60,7 +60,7 @@ test {
 
 File proguardFile = file("build/libs/${jar.archiveBaseName.get()}-proguard-${version}.jar")
 
-final def proguardJar = tasks.register('proguardJar', proguard.gradle.ProGuardTask) {
+final proguardJar = tasks.register('proguardJar', proguard.gradle.ProGuardTask) {
     dependsOn shadowJar
     inputs.file(shadowJar.archiveFile)
     inputs.file(file("proguard.conf"))
