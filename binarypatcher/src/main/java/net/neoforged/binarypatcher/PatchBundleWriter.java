@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
-import java.util.zip.CRC32;
+import java.util.Set;
 
 import static net.neoforged.binarypatcher.PatchBundleConstants.*;
 
@@ -19,17 +19,17 @@ import static net.neoforged.binarypatcher.PatchBundleConstants.*;
  */
 public class PatchBundleWriter implements AutoCloseable {
     private final OutputStream output;
-    private final EnumSet<TargetDistribution> bundleDistributions;
+    private final EnumSet<PatchBase> bundleDistributions;
     private final ByteArrayOutputStream entryBuffer;
     private int entryCount;
     private boolean closed;
     
-    public PatchBundleWriter(OutputStream output, EnumSet<TargetDistribution> bundleDistributions) {
+    public PatchBundleWriter(OutputStream output, Set<PatchBase> bundleDistributions) {
         if (bundleDistributions.isEmpty()) {
             throw new IllegalArgumentException("Bundle must target at least one distribution");
         }
         this.output = output;
-        this.bundleDistributions = bundleDistributions;
+        this.bundleDistributions = EnumSet.copyOf(bundleDistributions);
         this.entryBuffer = new ByteArrayOutputStream();
     }
     
@@ -37,9 +37,9 @@ public class PatchBundleWriter implements AutoCloseable {
      * Write an entry that creates a new file.
      */
     public void writeCreateEntry(String targetPath, byte[] fileContent, 
-                                  EnumSet<TargetDistribution> entryDistributions) throws IOException {
+                                  EnumSet<PatchBase> entryDistributions) throws IOException {
         validateEntry(entryDistributions);
-        int flags = ENTRY_TYPE_CREATE | TargetDistribution.toBitfield(entryDistributions);
+        int flags = ENTRY_TYPE_CREATE | PatchBase.toBitfield(entryDistributions);
         writeEntryInternal(flags, targetPath, 0, fileContent);
     }
     
@@ -47,32 +47,38 @@ public class PatchBundleWriter implements AutoCloseable {
      * Write an entry that modifies an existing file using a patch.
      */
     public void writeModifyEntry(String targetPath, long baseChecksum, byte[] patchData,
-                                  EnumSet<TargetDistribution> entryDistributions) throws IOException {
+                                  EnumSet<PatchBase> entryDistributions) throws IOException {
         validateEntry(entryDistributions);
         if (baseChecksum < 0 || baseChecksum > 0xFFFFFFFFL) {
             throw new IllegalArgumentException("Base checksum must be a valid 32-bit unsigned value");
         }
-        int flags = ENTRY_TYPE_MODIFY | TargetDistribution.toBitfield(entryDistributions);
+        int flags = ENTRY_TYPE_MODIFY | PatchBase.toBitfield(entryDistributions);
         writeEntryInternal(flags, targetPath, baseChecksum, patchData);
     }
     
     /**
      * Write an entry that removes a file.
      */
-    public void writeRemoveEntry(String targetPath, EnumSet<TargetDistribution> entryDistributions) 
+    public void writeRemoveEntry(String targetPath, EnumSet<PatchBase> entryDistributions)
             throws IOException {
         validateEntry(entryDistributions);
-        int flags = ENTRY_TYPE_REMOVE | TargetDistribution.toBitfield(entryDistributions);
+        int flags = ENTRY_TYPE_REMOVE | PatchBase.toBitfield(entryDistributions);
         writeEntryInternal(flags, targetPath, 0, new byte[0]);
     }
-    
-    /**
-     * Calculate CRC32 checksum for a file (utility method).
-     */
-    public static long calculateChecksum(byte[] data) {
-        CRC32 crc = new CRC32();
-        crc.update(data);
-        return crc.getValue();
+
+
+    public void write(Patch patch) throws IOException {
+        switch (patch.getOperation()) {
+            case CREATE:
+                writeCreateEntry(patch.getTargetPath(), patch.getData(), patch.getBaseTypes());
+                break;
+            case MODIFY:
+                writeModifyEntry(patch.getTargetPath(), patch.getBaseChecksumUnsigned(), patch.getData(), patch.getBaseTypes());
+                break;
+            case REMOVE:
+                writeRemoveEntry(patch.getTargetPath(), patch.getBaseTypes());
+                break;
+        }
     }
 
     @Override
@@ -82,7 +88,7 @@ public class PatchBundleWriter implements AutoCloseable {
             DataOutputStream dos = new DataOutputStream(output);
             dos.write(BUNDLE_SIGNATURE);
             dos.writeInt(entryCount);
-            dos.writeByte(TargetDistribution.toBitfield(bundleDistributions));
+            dos.writeByte(PatchBase.toBitfield(bundleDistributions));
 
             // Write all buffered entries
             entryBuffer.writeTo(output);
@@ -91,14 +97,14 @@ public class PatchBundleWriter implements AutoCloseable {
         }
     }
     
-    private void validateEntry(EnumSet<TargetDistribution> entryDistributions) {
+    private void validateEntry(EnumSet<PatchBase> entryDistributions) {
         if (closed) {
             throw new IllegalStateException("Bundle already closed");
         }
         if (entryDistributions.isEmpty()) {
             throw new IllegalArgumentException("Entry must target at least one distribution");
         }
-        for (TargetDistribution dist : entryDistributions) {
+        for (PatchBase dist : entryDistributions) {
             if (!bundleDistributions.contains(dist)) {
                 throw new IllegalArgumentException(
                     "Entry targets distribution " + dist + " not declared in bundle");
@@ -162,4 +168,5 @@ public class PatchBundleWriter implements AutoCloseable {
             }
         }
     }
+
 }

@@ -1,6 +1,9 @@
 package net.neoforged.binarypatcher;
 
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -9,7 +12,14 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import static net.neoforged.binarypatcher.PatchBundleConstants.*;
+import static net.neoforged.binarypatcher.PatchBundleConstants.BUNDLE_SIGNATURE;
+import static net.neoforged.binarypatcher.PatchBundleConstants.DISTRIBUTION_MASK;
+import static net.neoforged.binarypatcher.PatchBundleConstants.ENTRY_TYPE_CREATE;
+import static net.neoforged.binarypatcher.PatchBundleConstants.ENTRY_TYPE_MASK;
+import static net.neoforged.binarypatcher.PatchBundleConstants.ENTRY_TYPE_MODIFY;
+import static net.neoforged.binarypatcher.PatchBundleConstants.ENTRY_TYPE_REMOVE;
+import static net.neoforged.binarypatcher.PatchBundleConstants.MAX_CHAR;
+import static net.neoforged.binarypatcher.PatchBundleConstants.MIN_CHAR;
 
 /**
  * Reader for binary patch bundle files.
@@ -18,70 +28,15 @@ import static net.neoforged.binarypatcher.PatchBundleConstants.*;
  * 2. Inspect getTargetDistributions() and getEntryCount()
  * 3. Iterate through entries using the iterator
  */
-public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, AutoCloseable {
+public class PatchBundleReader implements Iterable<Patch>, AutoCloseable {
     private final DataInputStream input;
-    private final EnumSet<TargetDistribution> bundleDistributions;
+    private final EnumSet<PatchBase> supportedBaseTypes;
     private final int entryCount;
     private int entriesRead;
     private boolean closed;
 
-    /**
-     * Represents a single entry in the patch bundle.
-     */
-    public static class Entry {
-        private final PatchOperation type;
-        private final String targetPath;
-        private final EnumSet<TargetDistribution> distributions;
-        private final Long baseChecksum; // null for non-modify entries
-        private final byte[] data;
-
-        Entry(PatchOperation type, String targetPath, EnumSet<TargetDistribution> distributions,
-              Long baseChecksum, byte[] data) {
-            this.type = type;
-            this.targetPath = targetPath;
-            this.distributions = distributions;
-            this.baseChecksum = baseChecksum;
-            this.data = data;
-        }
-
-        public PatchOperation getType() {
-            return type;
-        }
-
-        public String getTargetPath() {
-            return targetPath;
-        }
-
-        public EnumSet<TargetDistribution> getDistributions() {
-            return distributions;
-        }
-
-        /**
-         * Returns the base checksum for MODIFY entries, null otherwise.
-         */
-        public Long getBaseChecksum() {
-            return baseChecksum;
-        }
-
-        /**
-         * Returns the entry data. For CREATE entries, this is the file content.
-         * For MODIFY entries, this is the xdelta patch data.
-         * For REMOVE entries, this is an empty array.
-         */
-        public byte[] getData() {
-            return data;
-        }
-
-        /**
-         * Returns the base checksum as an unsigned long value.
-         * Only valid for MODIFY entries.
-         */
-        public long getBaseChecksumUnsigned() {
-            if (baseChecksum == null) {
-                throw new IllegalStateException("Base checksum not available for " + type + " entries");
-            }
-            return baseChecksum & 0xFFFFFFFFL;
-        }
+    public PatchBundleReader(File file) throws IOException {
+        this(new BufferedInputStream(new FileInputStream(file)));
     }
 
     public PatchBundleReader(InputStream input) throws IOException {
@@ -102,7 +57,7 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
 
         // Read target distributions
         int distBitfield = this.input.readUnsignedByte();
-        this.bundleDistributions = TargetDistribution.fromBitfield(distBitfield);
+        this.supportedBaseTypes = PatchBase.fromBitfield(distBitfield);
 
         this.entriesRead = 0;
         this.closed = false;
@@ -111,8 +66,8 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
     /**
      * Returns the target distributions declared in the bundle header.
      */
-    public EnumSet<TargetDistribution> getTargetDistributions() {
-        return EnumSet.copyOf(bundleDistributions);
+    public EnumSet<PatchBase> getSupportedBaseTypes() {
+        return EnumSet.copyOf(supportedBaseTypes);
     }
 
     /**
@@ -137,7 +92,7 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
     }
 
     @Override
-    public Iterator<Entry> iterator() {
+    public Iterator<Patch> iterator() {
         if (entriesRead > 0) {
             throw new IllegalStateException("Cannot create multiple iterators or iterate after manual read");
         }
@@ -146,9 +101,10 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
 
     /**
      * Read the next entry from the bundle.
+     *
      * @return the next entry, or null if all entries have been read
      */
-    public Entry readEntry() throws IOException {
+    public Patch readEntry() throws IOException {
         if (closed) {
             throw new IllegalStateException("Reader is closed");
         }
@@ -176,11 +132,11 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
                 throw new IOException("Unknown entry type: " + entryTypeBits);
         }
 
-        EnumSet<TargetDistribution> entryDists = TargetDistribution.fromBitfield(distBitfield);
+        EnumSet<PatchBase> entryDists = PatchBase.fromBitfield(distBitfield);
 
         // Validate entry distributions against bundle distributions
-        for (TargetDistribution dist : entryDists) {
-            if (!bundleDistributions.contains(dist)) {
+        for (PatchBase dist : entryDists) {
+            if (!supportedBaseTypes.contains(dist)) {
                 throw new IOException("Entry targets distribution " + dist +
                         " not declared in bundle");
             }
@@ -210,7 +166,7 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
         }
 
         entriesRead++;
-        return new Entry(type, targetPath, entryDists, baseChecksum, data);
+        return new Patch(type, targetPath, entryDists, baseChecksum, data);
     }
 
     @Override
@@ -237,14 +193,14 @@ public class PatchBundleReader implements Iterable<PatchBundleReader.Entry>, Aut
         return new String(bytes, StandardCharsets.US_ASCII);
     }
 
-    private class EntryIterator implements Iterator<Entry> {
+    private class EntryIterator implements Iterator<Patch> {
         @Override
         public boolean hasNext() {
             return hasMoreEntries();
         }
 
         @Override
-        public Entry next() {
+        public Patch next() {
             if (!hasNext()) {
                 throw new NoSuchElementException("No more entries");
             }

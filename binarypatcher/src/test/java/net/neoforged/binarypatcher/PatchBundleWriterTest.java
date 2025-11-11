@@ -12,13 +12,14 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.EnumSet;
 import java.util.stream.Stream;
 
-import static org.assertj.core.api.Assertions.*;
-import static net.neoforged.binarypatcher.PatchBundleConstants.*;
+import static net.neoforged.binarypatcher.PatchBundleConstants.BUNDLE_SIGNATURE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PatchBundleWriterTest {
 
@@ -27,11 +28,11 @@ class PatchBundleWriterTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("file1.txt", "content1".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("file2.txt", "content2".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         DataInputStream dis = new DataInputStream(
@@ -45,8 +46,8 @@ class PatchBundleWriterTest {
     @Test
     void shouldWriteCorrectBundleDistributions() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        EnumSet<TargetDistribution> distributions = EnumSet.of(
-                TargetDistribution.CLIENT, TargetDistribution.SERVER);
+        EnumSet<PatchBase> distributions = EnumSet.of(
+                PatchBase.CLIENT, PatchBase.SERVER);
 
         new PatchBundleWriter(baos, distributions).close();
 
@@ -64,13 +65,13 @@ class PatchBundleWriterTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.allOf(TargetDistribution.class))) {
+                EnumSet.allOf(PatchBase.class))) {
             writer.writeCreateEntry("first.txt", "1".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeModifyEntry("second.txt", 100L, "2".getBytes(),
-                    EnumSet.of(TargetDistribution.SERVER));
+                    EnumSet.of(PatchBase.SERVER));
             writer.writeRemoveEntry("third.txt",
-                    EnumSet.of(TargetDistribution.JOINED));
+                    EnumSet.of(PatchBase.JOINED));
         }
 
         // Verify we can read all entries back
@@ -78,16 +79,16 @@ class PatchBundleWriterTest {
                 new java.io.ByteArrayInputStream(baos.toByteArray()))) {
             assertThat(reader.getEntryCount()).isEqualTo(3);
 
-            PatchBundleReader.Entry e1 = reader.readEntry();
-            assertThat(e1.getType()).isEqualTo(PatchOperation.CREATE);
+            Patch e1 = reader.readEntry();
+            assertThat(e1.getOperation()).isEqualTo(PatchOperation.CREATE);
             assertThat(e1.getTargetPath()).isEqualTo("first.txt");
 
-            PatchBundleReader.Entry e2 = reader.readEntry();
-            assertThat(e2.getType()).isEqualTo(PatchOperation.MODIFY);
+            Patch e2 = reader.readEntry();
+            assertThat(e2.getOperation()).isEqualTo(PatchOperation.MODIFY);
             assertThat(e2.getTargetPath()).isEqualTo("second.txt");
 
-            PatchBundleReader.Entry e3 = reader.readEntry();
-            assertThat(e3.getType()).isEqualTo(PatchOperation.REMOVE);
+            Patch e3 = reader.readEntry();
+            assertThat(e3.getOperation()).isEqualTo(PatchOperation.REMOVE);
             assertThat(e3.getTargetPath()).isEqualTo("third.txt");
         }
     }
@@ -95,7 +96,7 @@ class PatchBundleWriterTest {
     @Test
     void shouldThrowExceptionForEmptyBundleDistributions() {
         assertThatThrownBy(() ->
-                new PatchBundleWriter(new ByteArrayOutputStream(), EnumSet.noneOf(TargetDistribution.class)))
+                new PatchBundleWriter(new ByteArrayOutputStream(), EnumSet.noneOf(PatchBase.class)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Bundle must target at least one distribution");
     }
@@ -104,11 +105,11 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionForEmptyEntryDistributions() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
 
         assertThatThrownBy(() ->
                 writer.writeCreateEntry("test.txt", new byte[0],
-                        EnumSet.noneOf(TargetDistribution.class)))
+                        EnumSet.noneOf(PatchBase.class)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Entry must target at least one distribution");
     }
@@ -117,11 +118,11 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionWhenEntryDistributionNotInBundle() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
 
         assertThatThrownBy(() ->
                 writer.writeCreateEntry("test.txt", new byte[0],
-                        EnumSet.of(TargetDistribution.SERVER)))
+                        EnumSet.of(PatchBase.SERVER)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not declared in bundle");
     }
@@ -131,11 +132,11 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionForInvalidPaths(String invalidPath) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
 
         assertThatThrownBy(() ->
                 writer.writeCreateEntry(invalidPath, new byte[0],
-                        EnumSet.of(TargetDistribution.CLIENT)))
+                        EnumSet.of(PatchBase.CLIENT)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -143,12 +144,12 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionForStringWithInvalidCharacters() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
 
         // Test with newline character
         assertThatThrownBy(() ->
                 writer.writeCreateEntry("test\nfile.txt", new byte[0],
-                        EnumSet.of(TargetDistribution.CLIENT)))
+                        EnumSet.of(PatchBase.CLIENT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("invalid characters");
     }
@@ -157,17 +158,17 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionForInvalidChecksum() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
 
         assertThatThrownBy(() ->
                 writer.writeModifyEntry("test.txt", -1L, new byte[0],
-                        EnumSet.of(TargetDistribution.CLIENT)))
+                        EnumSet.of(PatchBase.CLIENT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("valid 32-bit unsigned value");
 
         assertThatThrownBy(() ->
                 writer.writeModifyEntry("test.txt", 0x100000000L, new byte[0],
-                        EnumSet.of(TargetDistribution.CLIENT)))
+                        EnumSet.of(PatchBase.CLIENT)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("valid 32-bit unsigned value");
     }
@@ -176,31 +177,21 @@ class PatchBundleWriterTest {
     void shouldThrowExceptionWhenWritingAfterClose() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT));
+                EnumSet.of(PatchBase.CLIENT));
         writer.close();
 
         assertThatThrownBy(() ->
                 writer.writeCreateEntry("test.txt", new byte[0],
-                        EnumSet.of(TargetDistribution.CLIENT)))
+                        EnumSet.of(PatchBase.CLIENT)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already closed");
-    }
-
-    @Test
-    void shouldCalculateChecksumCorrectly() {
-        byte[] data = "Hello World".getBytes(StandardCharsets.UTF_8);
-        long checksum = PatchBundleWriter.calculateChecksum(data);
-
-        assertThat(checksum).isNotZero();
-        assertThat(checksum).isGreaterThanOrEqualTo(0);
-        assertThat(checksum).isLessThanOrEqualTo(0xFFFFFFFFL);
     }
 
     @Test
     void shouldWriteEmptyBundle() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        new PatchBundleWriter(baos, EnumSet.of(TargetDistribution.CLIENT)).close();
+        new PatchBundleWriter(baos, EnumSet.of(PatchBase.CLIENT)).close();
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new java.io.ByteArrayInputStream(baos.toByteArray()))) {
@@ -215,9 +206,9 @@ class PatchBundleWriterTest {
 
         try (FileOutputStream fos = new FileOutputStream(bundleFile);
              PatchBundleWriter writer = new PatchBundleWriter(fos,
-                     EnumSet.of(TargetDistribution.CLIENT))) {
+                     EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("file.txt", "content".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         assertThat(bundleFile).exists();
@@ -236,10 +227,10 @@ class PatchBundleWriterTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             assertThatCode(() ->
                     writer.writeCreateEntry(validPath, new byte[0],
-                            EnumSet.of(TargetDistribution.CLIENT)))
+                            EnumSet.of(PatchBase.CLIENT)))
                     .doesNotThrowAnyException();
         }
     }

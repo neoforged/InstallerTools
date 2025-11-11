@@ -40,6 +40,7 @@ dependencyResolutionManagement {
             library('gson', 'com.google.code.gson:gson:2.8.9')
             library('fastcsv', 'de.siegmar:fastcsv:2.0.0')
             library('jetbrains-annotations', 'org.jetbrains:annotations:26.0.1')
+            library('jspecify', 'org.jspecify:jspecify:1.0.0')
         }
     }
 }

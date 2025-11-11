@@ -43,13 +43,13 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("file1.txt", "content1".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("file2.txt", "content2".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("file3.txt", "content3".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
@@ -61,14 +61,14 @@ class PatchBundleReaderTest {
     @Test
     void shouldReadBundleDistributions() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        EnumSet<TargetDistribution> distributions = EnumSet.of(
-                TargetDistribution.CLIENT, TargetDistribution.JOINED);
+        EnumSet<PatchBase> distributions = EnumSet.of(
+                PatchBase.CLIENT, PatchBase.JOINED);
 
         new PatchBundleWriter(baos, distributions).close();
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            assertThat(reader.getTargetDistributions()).isEqualTo(distributions);
+            assertThat(reader.getSupportedBaseTypes()).isEqualTo(distributions);
         }
     }
 
@@ -78,20 +78,20 @@ class PatchBundleReaderTest {
         byte[] content = "Test Content".getBytes(StandardCharsets.UTF_8);
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("test/file.txt", content,
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry entry = reader.readEntry();
+            Patch patch = reader.readEntry();
 
-            assertThat(entry.getType()).isEqualTo(PatchOperation.CREATE);
-            assertThat(entry.getTargetPath()).isEqualTo("test/file.txt");
-            assertThat(entry.getDistributions()).containsExactly(TargetDistribution.CLIENT);
-            assertThat(entry.getData()).isEqualTo(content);
-            assertThat(entry.getBaseChecksum()).isNull();
+            assertThat(patch.getOperation()).isEqualTo(PatchOperation.CREATE);
+            assertThat(patch.getTargetPath()).isEqualTo("test/file.txt");
+            assertThat(patch.getBaseTypes()).containsExactly(PatchBase.CLIENT);
+            assertThat(patch.getData()).isEqualTo(content);
+            assertThat(patch.getBaseChecksum()).isNull();
         }
     }
 
@@ -102,21 +102,21 @@ class PatchBundleReaderTest {
         long checksum = 0xABCD1234L;
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.SERVER))) {
+                EnumSet.of(PatchBase.SERVER))) {
             writer.writeModifyEntry("modified.bin", checksum, patchData,
-                    EnumSet.of(TargetDistribution.SERVER));
+                    EnumSet.of(PatchBase.SERVER));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry entry = reader.readEntry();
+            Patch patch = reader.readEntry();
 
-            assertThat(entry.getType()).isEqualTo(PatchOperation.MODIFY);
-            assertThat(entry.getTargetPath()).isEqualTo("modified.bin");
-            assertThat(entry.getDistributions()).containsExactly(TargetDistribution.SERVER);
-            assertThat(entry.getData()).isEqualTo(patchData);
-            assertThat(entry.getBaseChecksum()).isNotNull();
-            assertThat(entry.getBaseChecksumUnsigned()).isEqualTo(checksum);
+            assertThat(patch.getOperation()).isEqualTo(PatchOperation.MODIFY);
+            assertThat(patch.getTargetPath()).isEqualTo("modified.bin");
+            assertThat(patch.getBaseTypes()).containsExactly(PatchBase.SERVER);
+            assertThat(patch.getData()).isEqualTo(patchData);
+            assertThat(patch.getBaseChecksum()).isNotNull();
+            assertThat(patch.getBaseChecksumUnsigned()).isEqualTo(checksum);
         }
     }
 
@@ -125,20 +125,20 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.JOINED))) {
+                EnumSet.of(PatchBase.JOINED))) {
             writer.writeRemoveEntry("deleted.txt",
-                    EnumSet.of(TargetDistribution.JOINED));
+                    EnumSet.of(PatchBase.JOINED));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry entry = reader.readEntry();
+            Patch patch = reader.readEntry();
 
-            assertThat(entry.getType()).isEqualTo(PatchOperation.REMOVE);
-            assertThat(entry.getTargetPath()).isEqualTo("deleted.txt");
-            assertThat(entry.getDistributions()).containsExactly(TargetDistribution.JOINED);
-            assertThat(entry.getData()).isEmpty();
-            assertThat(entry.getBaseChecksum()).isNull();
+            assertThat(patch.getOperation()).isEqualTo(PatchOperation.REMOVE);
+            assertThat(patch.getTargetPath()).isEqualTo("deleted.txt");
+            assertThat(patch.getBaseTypes()).containsExactly(PatchBase.JOINED);
+            assertThat(patch.getData()).isEmpty();
+            assertThat(patch.getBaseChecksum()).isNull();
         }
     }
 
@@ -147,13 +147,13 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.allOf(TargetDistribution.class))) {
+                EnumSet.allOf(PatchBase.class))) {
             writer.writeCreateEntry("first.txt", "1".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeModifyEntry("second.txt", 100L, "2".getBytes(),
-                    EnumSet.of(TargetDistribution.SERVER));
+                    EnumSet.of(PatchBase.SERVER));
             writer.writeRemoveEntry("third.txt",
-                    EnumSet.of(TargetDistribution.JOINED));
+                    EnumSet.of(PatchBase.JOINED));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
@@ -161,16 +161,16 @@ class PatchBundleReaderTest {
             assertThat(reader.getEntryCount()).isEqualTo(3);
             assertThat(reader.getEntriesRead()).isEqualTo(0);
 
-            PatchBundleReader.Entry e1 = reader.readEntry();
-            assertThat(e1.getType()).isEqualTo(PatchOperation.CREATE);
+            Patch e1 = reader.readEntry();
+            assertThat(e1.getOperation()).isEqualTo(PatchOperation.CREATE);
             assertThat(reader.getEntriesRead()).isEqualTo(1);
 
-            PatchBundleReader.Entry e2 = reader.readEntry();
-            assertThat(e2.getType()).isEqualTo(PatchOperation.MODIFY);
+            Patch e2 = reader.readEntry();
+            assertThat(e2.getOperation()).isEqualTo(PatchOperation.MODIFY);
             assertThat(reader.getEntriesRead()).isEqualTo(2);
 
-            PatchBundleReader.Entry e3 = reader.readEntry();
-            assertThat(e3.getType()).isEqualTo(PatchOperation.REMOVE);
+            Patch e3 = reader.readEntry();
+            assertThat(e3.getOperation()).isEqualTo(PatchOperation.REMOVE);
             assertThat(reader.getEntriesRead()).isEqualTo(3);
 
             assertThat(reader.hasMoreEntries()).isFalse();
@@ -183,21 +183,21 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("file1.txt", "a".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("file2.txt", "b".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("file3.txt", "c".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            List<PatchBundleReader.Entry> entries = new ArrayList<>();
+            List<Patch> entries = new ArrayList<>();
 
-            for (PatchBundleReader.Entry entry : reader) {
-                entries.add(entry);
+            for (Patch patch : reader) {
+                entries.add(patch);
             }
 
             assertThat(entries).hasSize(3);
@@ -227,7 +227,7 @@ class PatchBundleReaderTest {
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            Iterator<PatchBundleReader.Entry> it1 = reader.iterator();
+            Iterator<Patch> it1 = reader.iterator();
             it1.next(); // Consume one entry
 
             assertThatThrownBy(() -> reader.iterator())
@@ -265,7 +265,7 @@ class PatchBundleReaderTest {
     void shouldReadEmptyBundle() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        new PatchBundleWriter(baos, EnumSet.of(TargetDistribution.CLIENT)).close();
+        new PatchBundleWriter(baos, EnumSet.of(PatchBase.CLIENT)).close();
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
@@ -281,18 +281,18 @@ class PatchBundleReaderTest {
 
         try (FileOutputStream fos = new FileOutputStream(bundleFile);
              PatchBundleWriter writer = new PatchBundleWriter(fos,
-                     EnumSet.of(TargetDistribution.CLIENT))) {
+                     EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("file.txt", "content".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 Files.newInputStream(bundleFile.toPath()))) {
             assertThat(reader.getEntryCount()).isEqualTo(1);
 
-            PatchBundleReader.Entry entry = reader.readEntry();
-            assertThat(entry.getTargetPath()).isEqualTo("file.txt");
-            assertThat(entry.getData()).isEqualTo("content".getBytes());
+            Patch patch = reader.readEntry();
+            assertThat(patch.getTargetPath()).isEqualTo("file.txt");
+            assertThat(patch.getData()).isEqualTo("content".getBytes());
         }
     }
 
@@ -391,16 +391,16 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("test.txt", "content".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry entry = reader.readEntry();
+            Patch patch = reader.readEntry();
 
-            assertThatThrownBy(() -> entry.getBaseChecksumUnsigned())
+            assertThatThrownBy(() -> patch.getBaseChecksumUnsigned())
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("not available for CREATE entries");
         }
@@ -411,37 +411,37 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.allOf(TargetDistribution.class))) {
+                EnumSet.allOf(PatchBase.class))) {
             writer.writeCreateEntry("client-only.txt", "a".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeCreateEntry("server-only.txt", "b".getBytes(),
-                    EnumSet.of(TargetDistribution.SERVER));
+                    EnumSet.of(PatchBase.SERVER));
             writer.writeCreateEntry("joined-only.txt", "c".getBytes(),
-                    EnumSet.of(TargetDistribution.JOINED));
+                    EnumSet.of(PatchBase.JOINED));
             writer.writeCreateEntry("client-server.txt", "d".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT, TargetDistribution.SERVER));
+                    EnumSet.of(PatchBase.CLIENT, PatchBase.SERVER));
             writer.writeCreateEntry("all.txt", "e".getBytes(),
-                    EnumSet.allOf(TargetDistribution.class));
+                    EnumSet.allOf(PatchBase.class));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry e1 = reader.readEntry();
-            assertThat(e1.getDistributions()).containsExactly(TargetDistribution.CLIENT);
+            Patch e1 = reader.readEntry();
+            assertThat(e1.getBaseTypes()).containsExactly(PatchBase.CLIENT);
 
-            PatchBundleReader.Entry e2 = reader.readEntry();
-            assertThat(e2.getDistributions()).containsExactly(TargetDistribution.SERVER);
+            Patch e2 = reader.readEntry();
+            assertThat(e2.getBaseTypes()).containsExactly(PatchBase.SERVER);
 
-            PatchBundleReader.Entry e3 = reader.readEntry();
-            assertThat(e3.getDistributions()).containsExactly(TargetDistribution.JOINED);
+            Patch e3 = reader.readEntry();
+            assertThat(e3.getBaseTypes()).containsExactly(PatchBase.JOINED);
 
-            PatchBundleReader.Entry e4 = reader.readEntry();
-            assertThat(e4.getDistributions()).containsExactlyInAnyOrder(
-                    TargetDistribution.CLIENT, TargetDistribution.SERVER);
+            Patch e4 = reader.readEntry();
+            assertThat(e4.getBaseTypes()).containsExactlyInAnyOrder(
+                    PatchBase.CLIENT, PatchBase.SERVER);
 
-            PatchBundleReader.Entry e5 = reader.readEntry();
-            assertThat(e5.getDistributions()).containsExactlyInAnyOrder(
-                    TargetDistribution.CLIENT, TargetDistribution.SERVER, TargetDistribution.JOINED);
+            Patch e5 = reader.readEntry();
+            assertThat(e5.getBaseTypes()).containsExactlyInAnyOrder(
+                    PatchBase.CLIENT, PatchBase.SERVER, PatchBase.JOINED);
         }
     }
 
@@ -451,15 +451,15 @@ class PatchBundleReaderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("large.bin", largeData,
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
 
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
-            PatchBundleReader.Entry entry = reader.readEntry();
-            assertThat(entry.getData()).isEqualTo(largeData);
+            Patch patch = reader.readEntry();
+            assertThat(patch.getData()).isEqualTo(largeData);
         }
     }
 
@@ -487,35 +487,35 @@ class PatchBundleReaderTest {
 
         // Write complex bundle
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.allOf(TargetDistribution.class))) {
+                EnumSet.allOf(PatchBase.class))) {
             writer.writeCreateEntry("new/file.txt", "New content".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
             writer.writeModifyEntry("existing/file.bin", 0xDEADBEEFL,
-                    new byte[]{1, 2, 3, 4, 5}, EnumSet.of(TargetDistribution.SERVER));
+                    new byte[]{1, 2, 3, 4, 5}, EnumSet.of(PatchBase.SERVER));
             writer.writeRemoveEntry("old/file.dat",
-                    EnumSet.of(TargetDistribution.JOINED));
+                    EnumSet.of(PatchBase.JOINED));
             writer.writeCreateEntry("shared.txt", "Shared".getBytes(),
-                    EnumSet.allOf(TargetDistribution.class));
+                    EnumSet.allOf(PatchBase.class));
         }
 
         // Read and verify
         try (PatchBundleReader reader = new PatchBundleReader(
                 new ByteArrayInputStream(baos.toByteArray()))) {
             assertThat(reader.getEntryCount()).isEqualTo(4);
-            assertThat(reader.getTargetDistributions())
-                    .containsExactlyInAnyOrder(TargetDistribution.values());
+            assertThat(reader.getSupportedBaseTypes())
+                    .containsExactlyInAnyOrder(PatchBase.values());
 
             // Verify all entries
-            List<PatchBundleReader.Entry> entries = new ArrayList<>();
-            for (PatchBundleReader.Entry entry : reader) {
-                entries.add(entry);
+            List<Patch> entries = new ArrayList<>();
+            for (Patch patch : reader) {
+                entries.add(patch);
             }
 
             assertThat(entries).hasSize(4);
-            assertThat(entries.get(0).getType()).isEqualTo(PatchOperation.CREATE);
-            assertThat(entries.get(1).getType()).isEqualTo(PatchOperation.MODIFY);
-            assertThat(entries.get(2).getType()).isEqualTo(PatchOperation.REMOVE);
-            assertThat(entries.get(3).getType()).isEqualTo(PatchOperation.CREATE);
+            assertThat(entries.get(0).getOperation()).isEqualTo(PatchOperation.CREATE);
+            assertThat(entries.get(1).getOperation()).isEqualTo(PatchOperation.MODIFY);
+            assertThat(entries.get(2).getOperation()).isEqualTo(PatchOperation.REMOVE);
+            assertThat(entries.get(3).getOperation()).isEqualTo(PatchOperation.CREATE);
         }
     }
 
@@ -523,9 +523,9 @@ class PatchBundleReaderTest {
     private ByteArrayOutputStream createSimpleBundle() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (PatchBundleWriter writer = new PatchBundleWriter(baos,
-                EnumSet.of(TargetDistribution.CLIENT))) {
+                EnumSet.of(PatchBase.CLIENT))) {
             writer.writeCreateEntry("test.txt", "test".getBytes(),
-                    EnumSet.of(TargetDistribution.CLIENT));
+                    EnumSet.of(PatchBase.CLIENT));
         }
         return baos;
     }

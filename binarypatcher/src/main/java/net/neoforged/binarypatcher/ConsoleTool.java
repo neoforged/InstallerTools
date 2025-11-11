@@ -6,9 +6,9 @@ package net.neoforged.binarypatcher;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
-import java.util.TimeZone;
+import java.util.Map;
 
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
@@ -17,36 +17,29 @@ import joptsimple.OptionSpec;
 
 public class ConsoleTool {
     public static final boolean DEBUG = Boolean.getBoolean("net.neoforged.binarypatcher.debug");
-    public static final long ZIPTIME = 628041600000L;
     public static void main(String[] args) throws IOException {
-        TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!
         OptionParser parser = new OptionParser();
-        // Shared arguments
-        OptionSpec<File> cleanO = parser.accepts("clean").withRequiredArg().ofType(File.class).required();
-        OptionSpec<File> outputO = parser.accepts("output").withRequiredArg().ofType(File.class).required();
-        OptionSpec<String> prefixO = parser.accepts("prefix").withRequiredArg();
-        OptionSpec<Void> packO = parser.accepts("pack200");
-        OptionSpec<Void> legacyO = parser.accepts("legacy", "Uses the legacy patch header format, also implies --pack200. NOT RECOMENDED.");
-        OptionSpec<Void> minimizeO = parser.accepts("minimize");
-
-        // Create arguments
-        OptionSpec<File> createO = parser.acceptsAll(Arrays.asList("dirty", "create")).withRequiredArg().ofType(File.class);
-        OptionSpec<File> patchesO = parser.accepts("patches", "Source patch files; binpatches will include classes matching source patched classes or their inner classes.").withRequiredArg().ofType(File.class);
-        OptionSpec<File> includeClassesO = parser.accepts("include-classes", "Source jars determining classes (and matching inner classes) to include, in addition to those specified by --patches.").withRequiredArg().ofType(File.class);
-        OptionSpec<File> srgO = parser.accepts("srg").withRequiredArg().ofType(File.class);
+        // Diff arguments
+        OptionSpec<Void> diffO = parser.accepts("diff").availableUnless("patch");
+        OptionSpec<File> clientBaseO = parser.accepts("base-client").availableIf(diffO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> serverBaseO = parser.accepts("base-server").availableIf(diffO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> joinedBaseO = parser.accepts("base-joined").availableIf(diffO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> modifiedO = parser.accepts("modified").availableIf(diffO).withRequiredArg().ofType(File.class).required();
+        OptionSpec<Void> optimizeConstantPoolO = parser.accepts("optimize-constantpool").availableIf(diffO);
 
         // Apply arguments
-        OptionSpec<File> applyO = parser.accepts("apply").withRequiredArg().ofType(File.class);
-        OptionSpec<Void> dataO = parser.accepts("data");
-        OptionSpec<Void> unpatchedO = parser.accepts("unpatched");
+        OptionSpec<File> applyO = parser.accepts("apply").availableUnless(diffO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> cleanO = parser.accepts("base").availableIf(applyO).withRequiredArg().ofType(File.class).required();
+        OptionSpec<PatchBase> baseTypeO = parser.accepts("base-type").availableIf(applyO).withRequiredArg().ofType(PatchBase.class).required();
+
+        // Shared arguments
+        OptionSpec<File> outputO = parser.accepts("output").withRequiredArg().ofType(File.class).required();
 
         try {
             OptionSet options = parser.parse(args);
 
             File output = options.valueOf(outputO).getAbsoluteFile();
-            boolean legacy = options.has(legacyO);
-            boolean pack200 = legacy || options.has(packO);
-            boolean minimizePatches = options.has(minimizeO);
+            boolean optimizeConstantPool = options.has(optimizeConstantPoolO);
 
             if (output.exists() && !output.delete())
                 err("Could not delete output file: " + output);
@@ -54,114 +47,58 @@ public class ConsoleTool {
             if (!output.getParentFile().exists() && !output.getParentFile().mkdirs())
                 err("Could not make output folders: " + output.getParentFile());
 
-            if (options.has(createO) && options.has(applyO))
-                err("Cannot specify --apply and --create at the same time!");
+            if (options.has(diffO)) {
+                File modifiedFile = options.valueOf(modifiedO);
 
-            if (options.has(createO)) {
-                if (options.has(dataO))      err("Connot specify --create/--dirty and --data at the same time!");
-                if (options.has(unpatchedO)) err("Connot specify --create/--dirty and --unpatched at the same time!");
-
-                List<File> clean = options.valuesOf(cleanO);
-                List<File> dirty = options.valuesOf(createO);
-                List<String> prefixes = options.valuesOf(prefixO);
+                Map<PatchBase, File> baseFiles = new EnumMap<>(PatchBase.class);
+                File clientBase = options.valueOf(clientBaseO);
+                if (clientBase != null) {
+                    baseFiles.put(PatchBase.CLIENT, clientBase);
+                }
+                File serverBase = options.valueOf(serverBaseO);
+                if (serverBase != null) {
+                    baseFiles.put(PatchBase.SERVER, serverBase);
+                }
+                File joinedBase = options.valueOf(joinedBaseO);
+                if (joinedBase != null) {
+                    baseFiles.put(PatchBase.JOINED, joinedBase);
+                }
+                if (baseFiles.isEmpty()) {
+                    err("A base file must be given via any combination of --base-client, --base-server, --base-joined");
+                }
 
                 log("Generating: ");
+                log("  Bases:  " + baseFiles);
+                log("  Modified:  " + modifiedFile);
                 log("  Output:  " + output);
-                log("  Pack200: " + pack200);
-                log("  Legacy:    " + legacy);
-                log("  Minimize patches: " + minimizePatches);
+                log("Diff Options: ");
+                log("  Optimize Constant Table: " + optimizeConstantPool);
 
-                Generator gen = new Generator(output).pack200(pack200).legacy(legacy).minimizePatches(minimizePatches);
+                DiffOptions diffOptions = new DiffOptions();
+                diffOptions.setOptimizeConstantPool(optimizeConstantPool);
+                Generator.createPatchBundle(
+                        baseFiles,
+                        modifiedFile,
+                        output,
+                        diffOptions);
 
-                if (clean.size() > 1 || dirty.size() > 1 || prefixes.size() > 1) {
-                    if (clean.size() != dirty.size() || dirty.size() != prefixes.size()) {
-                        log("When specifying multiple patchsets, you must have the same number of --clean, --dirty, and --prefix arguments");
-                        int max = Math.max(clean.size(), Math.max(dirty.size(), prefixes.size()));
-                        for (int x = 0; x < max; x++) {
-                            log("Set #" + x + ':');
-                            log("  Prefix: " + (x < prefixes.size() ? prefixes.get(x) : null));
-                            log("  Clean:  " + (x < clean.size() ? clean.get(x) : null));
-                            log("  Dirty:  " + (x < dirty.size() ? dirty.get(x) : null));
-                        }
-                        err("Unbalanced patchset arguments, see log for details");
-                    }
-
-                    for (int x = 0; x < clean.size(); x++) {
-                        log("  " + prefixes.get(x));
-                        log("    Clean: " + clean.get(x));
-                        log("    Dirty: " + dirty.get(x));
-                        gen.addSet(clean.get(x), dirty.get(x), prefixes.get(x));
-                    }
-                } else {
-                    if (!prefixes.isEmpty()) {
-                        log("  " + prefixes.get(0));
-                        log("    Clean: " + clean.get(0));
-                        log("    Dirty: " + dirty.get(0));
-                        gen.addSet(clean.get(0), dirty.get(0), prefixes.get(0));
-                    } else {
-                        log("  Clean: " + clean.get(0));
-                        log("  Dirty: " + dirty.get(0));
-                        gen.addSet(clean.get(0), dirty.get(0), null);
-                    }
-                }
-
-                if (options.has(patchesO)) {
-                    for (File dir : options.valuesOf(patchesO)) {
-                        log("  Patches: " + dir);
-                        gen.loadPatches(dir);
-                    }
-                }
-                
-                if (options.has(includeClassesO)) {
-                    for (File file : options.valuesOf(includeClassesO)) {
-                        log("  Include Classes: " + file);
-                        gen.loadIncludeClasses(file);
-                    }
-                }
-
-                if (options.has(srgO)) {
-                    for (File file : options.valuesOf(srgO)) {
-                        log("  SRG:     " + file);
-                        gen.loadMappings(file);
-                    }
-                }
-
-                gen.create();
             } else if (options.has(applyO)) {
-                File clean_jar = options.valueOf(cleanO);
-
-                if (options.has(srgO))            err("Connot specify --apply and --srg at the same time!");
-                if (options.has(patchesO))        err("Connot specify --apply and --patches at the same time!");
-                if (options.has(includeClassesO)) err("Connot specify --apply and --include-classes at the same time!");
+                File baseFile = options.valueOf(cleanO);
+                PatchBase baseType = options.valueOf(baseTypeO);
+                List<File> patches = options.valuesOf(applyO);
 
                 long start = System.currentTimeMillis();
 
-                Patcher patcher = new Patcher(clean_jar, output)
-                    .keepData(options.has(dataO))
-                    .includeUnpatched(options.has(unpatchedO))
-                    .pack200(pack200)
-                    .legacy(legacy);
-
                 log("Applying: ");
-                log("  Clean:     " + clean_jar);
+                log("  Base:      " + baseFile);
+                log("  Base Type: " + baseType);
                 log("  Output:    " + output);
-                log("  KeepData:  " + options.has(dataO));
-                log("  Unpatched: " + options.has(unpatchedO));
-                log("  Pack200:   " + pack200);
-                log("  Legacy:    " + legacy);
-
-                List<File> patches = options.valuesOf(applyO);
-                List<String> prefixes = options.valuesOf(prefixO);
-
-                if (!prefixes.isEmpty() && patches.size() != prefixes.size())
-                    err("Patches and prefixes arguments must be paird if they are used together. Use NULL to specify an empty prefix.");
+                log("  Patches:   " + patches);
 
                 long startLoadingPatches = System.currentTimeMillis();
-                for (int x = 0; x < patches.size(); x++)
-                    patcher.loadPatches(patches.get(x), x >= prefixes.size() || "NULL".equals(prefixes.get(x)) ? null : prefixes.get(x));
                 debug("Loaded patches in " + (System.currentTimeMillis() - startLoadingPatches) + "ms");
 
-                patcher.process();
+                Patcher.patch(baseFile, baseType, patches, output);
 
                 debug("Completed in " + (System.currentTimeMillis() - start) + "ms");
 

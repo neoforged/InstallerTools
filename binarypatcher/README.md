@@ -20,24 +20,24 @@ following file header:
 | bundle_entries      | 32-bit signed  | Number of entries in the bundle. Negative values are not allowed, but 0 is.               |
 | bundle_target_dists | 8-bit unsigned | Bitfield that indicates the [target distributions](#target-distributions) of this bundle. |
 
-The header is followed by the following structure for each entry, as many times as indicated by the bundle header.
+The header is followed by the following structure for each patch, as many times as indicated by the bundle header.
 
 ### Entry Format
 
 | ID                  | Data Type               | Description                                                                                                                                |
 |---------------------|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| entry_flags         | 8-bit unsigned          | [Flags for the entry](#entry-flags), unknown bits that are set must be ignored.                                                            |
-| entry_target        | [string](#strings)      | The [relative path](#relative-paths) of the file targeted by this entry.                                                                   |
-| entry_base_checksum | 32-bit unsigned integer | Only present if entry type is "Modify". Denotes the CRC-32 checksum of the base file being patched.                                        |
+| entry_flags         | 8-bit unsigned          | [Flags for the patch](#patch-flags), unknown bits that are set must be ignored.                                                            |
+| entry_target        | [string](#strings)      | The [relative path](#relative-paths) of the file targeted by this patch.                                                                   |
+| entry_base_checksum | 32-bit unsigned integer | Only present if patch type is "Modify". Denotes the CRC-32 checksum of the base file being patched.                                        |
 | entry_data_length   | 32-bit unsigned integer | The length of the following patch data. For entries of type "Remove File", this must be 0.                                                 |
-| entry_data          | bytes                   | The patch data. For entry type "Create", this is the raw contents of the new file. For the "Modify" types, it is a patch in xdelta format. |
+| entry_data          | bytes                   | The patch data. For patch type "Create", this is the raw contents of the new file. For the "Modify" types, it is a patch in xdelta format. |
 
 ### Entry Flags
 
 | Bitmask | Description                                                                        |
 |---------|------------------------------------------------------------------------------------|
 | 0x07    | Bitfield defining the [target distribution](#target-distributions) for this patch. |
-| 0x18    | Indicates the type of entry. `00`=Create, `01`=Modify, `10`=Remove                 |
+| 0x18    | Indicates the type of patch. `00`=Create, `01`=Modify, `10`=Remove                 |
 
 ## Strings
 
@@ -65,10 +65,10 @@ Patches can be built against three different types of base jars:
 - The server jar, processed by the PROCESS_JAR installertools task.
 - The merged client and server jars ("joined"), processed by the PROCESS_JAR installertools task.
 
-The header of a bundle as well as each entry in it define the base jars it applies to.
+The header of a bundle as well as each patch in it define the base jars it applies to.
 It's possible for a bundle to declare it was built against a jar while not containing any patches for it (if it was not
 modified),
-while an entry must not declare a distribution that was not defined in the bundle header.
+while an patch must not declare a distribution that was not defined in the bundle header.
 
 | Bitmask | Description                                     |
 |---------|-------------------------------------------------|
