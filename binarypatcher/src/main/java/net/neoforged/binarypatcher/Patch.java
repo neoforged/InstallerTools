@@ -55,7 +55,12 @@ public class Patch {
     }
 
     /**
-     * {@return base checksum for MODIFY entries, -1 otherwise}
+     * Checksum for the base file of the patch.
+     * <p>
+     *     Only available for entries where {@link #getOperation()} is {@link PatchOperation#MODIFY}.
+     *     Otherwise, the value is -1.
+     * </p>
+     * @return The base files checksum, or -1 if not available.
      */
     public long getBaseChecksum() {
         return baseChecksum;
