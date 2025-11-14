@@ -6,37 +6,44 @@ package net.neoforged.binarypatcher;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import joptsimple.OptionException;
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
+import joptsimple.*;
 
 public class ConsoleTool {
     public static final boolean DEBUG = Boolean.getBoolean("net.neoforged.binarypatcher.debug");
     public static void main(String[] args) throws IOException {
         OptionParser parser = new OptionParser();
+        //Mode flags
+        OptionSpecBuilder diffO = parser.accepts("diff");
+        OptionSpecBuilder patchO = parser.accepts("patch");
+
+        parser.mutuallyExclusive(diffO, patchO);
+
         // Diff arguments
-        OptionSpec<Void> diffO = parser.accepts("diff").availableUnless("apply");
         OptionSpec<File> clientBaseO = parser.accepts("base-client").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> serverBaseO = parser.accepts("base-server").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> joinedBaseO = parser.accepts("base-joined").availableIf(diffO).withRequiredArg().ofType(File.class);
-        OptionSpec<File> modifiedO = parser.accepts("modified").availableIf(diffO).withRequiredArg().ofType(File.class).required();
+        OptionSpec<File> modifiedO = parser.accepts("modified").requiredIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<Void> optimizeConstantPoolO = parser.accepts("optimize-constantpool").availableIf(diffO);
 
         // Apply arguments
-        OptionSpec<File> applyO = parser.accepts("apply").availableUnless(diffO).withRequiredArg().ofType(File.class);
-        OptionSpec<File> cleanO = parser.accepts("base").availableIf(applyO).withRequiredArg().ofType(File.class).required();
-        OptionSpec<PatchBase> baseTypeO = parser.accepts("base-type").availableIf(applyO).withRequiredArg().ofType(PatchBase.class).required();
+        OptionSpec<File> patchesO = parser.accepts("patches").requiredIf(patchO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> baseFileO = parser.accepts("base").requiredIf(patchO).withRequiredArg().ofType(File.class);
+        OptionSpec<PatchBase> baseTypeO = parser.accepts("base-type").requiredIf(patchO).withRequiredArg().ofType(PatchBase.class);
 
         // Shared arguments
-        OptionSpec<File> outputO = parser.accepts("output").withRequiredArg().ofType(File.class).required();
+        OptionSpec<File> outputO = parser.accepts("output").withRequiredArg().required().ofType(File.class);
+
+        OptionSpec<Void> helpO = parser.acceptsAll(Arrays.asList("?", "help")).forHelp();
 
         try {
             OptionSet options = parser.parse(args);
+
+            if (options.has(helpO)) {
+                parser.printHelpOn(System.out);
+                return;
+            }
 
             File output = options.valueOf(outputO).getAbsoluteFile();
             boolean optimizeConstantPool = options.has(optimizeConstantPoolO);
@@ -82,10 +89,10 @@ public class ConsoleTool {
                         output,
                         diffOptions);
 
-            } else if (options.has(applyO)) {
-                File baseFile = options.valueOf(cleanO);
+            } else if (options.has(patchO)) {
+                File baseFile = options.valueOf(baseFileO);
                 PatchBase baseType = options.valueOf(baseTypeO);
-                List<File> patches = options.valuesOf(applyO);
+                List<File> patches = options.valuesOf(patchesO);
 
                 long start = System.currentTimeMillis();
 
