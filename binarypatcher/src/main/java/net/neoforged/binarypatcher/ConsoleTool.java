@@ -20,7 +20,7 @@ public class ConsoleTool {
     public static void main(String[] args) throws IOException {
         OptionParser parser = new OptionParser();
         // Diff arguments
-        OptionSpec<Void> diffO = parser.accepts("diff").availableUnless("patch");
+        OptionSpec<Void> diffO = parser.accepts("diff").availableUnless("apply");
         OptionSpec<File> clientBaseO = parser.accepts("base-client").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> serverBaseO = parser.accepts("base-server").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> joinedBaseO = parser.accepts("base-joined").availableIf(diffO).withRequiredArg().ofType(File.class);
