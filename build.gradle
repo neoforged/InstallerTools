@@ -83,7 +83,7 @@ assemble.dependsOn proguardJar
 configurations {
     consumable("proguard") {
         attributes {
-            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.EXTERNAL))
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.SHADOWED))
         }
     }
 }
