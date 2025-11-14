@@ -91,7 +91,7 @@ class PatchBundleReaderTest {
             assertThat(patch.getTargetPath()).isEqualTo("test/file.txt");
             assertThat(patch.getBaseTypes()).containsExactly(PatchBase.CLIENT);
             assertThat(patch.getData()).isEqualTo(content);
-            assertThat(patch.getBaseChecksum()).isNull();
+            assertThat(patch.getBaseChecksum()).isEqualTo(-1L);
         }
     }
 
@@ -138,7 +138,7 @@ class PatchBundleReaderTest {
             assertThat(patch.getTargetPath()).isEqualTo("deleted.txt");
             assertThat(patch.getBaseTypes()).containsExactly(PatchBase.JOINED);
             assertThat(patch.getData()).isEmpty();
-            assertThat(patch.getBaseChecksum()).isNull();
+            assertThat(patch.getBaseChecksum()).isEqualTo(-1L);
         }
     }
 
