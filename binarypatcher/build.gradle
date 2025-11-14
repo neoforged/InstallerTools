@@ -7,7 +7,7 @@ application {
 }
 
 dependencies {
-    implementation(libs.srgutils)
+    compileOnly(libs.jspecify)
     implementation(libs.jopt)
     implementation(libs.xz)
     implementation(libs.xdelta)

@@ -1,131 +1,195 @@
-/*
- * Copyright (c) Forge Development LLC
- * SPDX-License-Identifier: LGPL-2.1-only
- */
 package net.neoforged.binarypatcher;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.zip.Adler32;
-
 import com.nothome.delta.Delta;
+import org.jspecify.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.zip.Adler32;
+
+/**
+ * Represents a single entry in the patch bundle.
+ */
 public class Patch {
-    private static final byte[] EMPTY_DATA = new byte[0];
-    private static final Delta DELTA = new Delta();
+    private final PatchOperation operation;
+    private final String targetPath;
+    private final EnumSet<PatchBase> baseTypes;
+    private final long baseChecksum; // -1 for non-modify entries
+    private final byte[] data;
 
-    public final String obf; //TODO: Getters if I care...
-    public final String srg;
-    public final boolean exists;
-    public final int checksum;
-    public final byte[] data;
-
-    private Patch(String obf, String srg, boolean exists, int checksum, byte[] data) {
-        this.obf = obf;
-        this.srg = srg;
-        this.exists = exists;
-        this.checksum = checksum;
+    Patch(PatchOperation operation, String targetPath, EnumSet<PatchBase> baseTypes,
+          Long baseChecksum, byte[] data) {
+        this.operation = operation;
+        this.targetPath = targetPath;
+        this.baseTypes = baseTypes;
+        if (operation == PatchOperation.MODIFY) {
+            this.baseChecksum = Objects.requireNonNull(baseChecksum, "baseChecksum");
+        } else {
+            this.baseChecksum = -1;
+        }
         this.data = data;
     }
 
-    public static Patch from(String obf, String srg, byte[] clean, byte[] dirty, boolean minimizePatch) throws IOException {
-        if (minimizePatch) {
-            dirty = shrinkDirtyForPatch(clean, dirty);
+    public PatchOperation getOperation() {
+        return operation;
+    }
+
+    public String getTargetPath() {
+        return targetPath;
+    }
+
+    public EnumSet<PatchBase> getBaseTypes() {
+        return baseTypes;
+    }
+
+    /**
+     * {@return base checksum for MODIFY entries, -1 otherwise}
+     */
+    public long getBaseChecksum() {
+        return baseChecksum;
+    }
+
+    /**
+     * Returns the entry data. For CREATE entries, this is the file content.
+     * For MODIFY entries, this is the xdelta patch data.
+     * For REMOVE entries, this is an empty array.
+     */
+    public byte[] getData() {
+        return data;
+    }
+
+    /**
+     * Returns the base checksum as an unsigned long value.
+     * Only valid for MODIFY entries.
+     */
+    public long getBaseChecksumUnsigned() {
+        if (baseChecksum == -1) {
+            throw new IllegalStateException("Base checksum not available for " + operation + " entries");
         }
-        byte[] diff = dirty.length == 0 ? EMPTY_DATA : DELTA.compute(clean, dirty);
-        int checksum = clean.length == 0 ? 0 : adlerHash(clean);
-        return new Patch(obf, srg, clean.length != 0, checksum, diff);
+        return baseChecksum & 0xFFFFFFFFL;
+    }
+
+
+    /**
+     * @param baseData    Null values indicate that the patch base did not contain the target path.
+     * @param patchedData Null indicates the target path has been removed from the patched jar.
+     */
+    public static void from(String targetPath,
+                            EnumMap<PatchBase, byte[]> baseData,
+                            byte @Nullable [] patchedData,
+                            DiffOptions options,
+                            Consumer<Patch> consumer) throws IOException {
+
+        // Find all bases that contained the file
+        EnumSet<PatchBase> basesWithFile = EnumSet.noneOf(PatchBase.class);
+        for (Map.Entry<PatchBase, byte[]> entry : baseData.entrySet()) {
+            if (entry.getValue() != null) {
+                basesWithFile.add(entry.getKey());
+            }
+        }
+
+        // If the file was removed, emit a patch record to remove it from distributions that had it
+        if (patchedData == null) {
+            if (!basesWithFile.isEmpty()) {
+                consumer.accept(new Patch(
+                        PatchOperation.REMOVE,
+                        targetPath,
+                        basesWithFile,
+                        null,
+                        null
+                ));
+            }
+            return;
+        }
+
+        // If the file wasn't removed, emit a CREATE patch for all bases that did not contain the file
+        EnumSet<PatchBase> basesWithoutFile = EnumSet.allOf(PatchBase.class);
+        basesWithoutFile.removeAll(basesWithFile);
+        if (!basesWithoutFile.isEmpty()) {
+            consumer.accept(new Patch(
+                    PatchOperation.CREATE,
+                    targetPath,
+                    basesWithFile,
+                    null,
+                    patchedData
+            ));
+        }
+
+        if (basesWithFile.isEmpty()) {
+            return; // No need to start diffing
+        }
+
+        // Otherwise, create deltas for all bases, then group by the created patch content and emit grouped
+        Collection<List<Map.Entry<PatchBase, byte[]>>> baseDataGroups = baseData
+                .entrySet()
+                .stream()
+                .filter(e -> e.getValue() != null)
+                .collect(Collectors.groupingBy(e -> hashContent(e.getValue())))
+                .values();
+
+        for (List<Map.Entry<PatchBase, byte[]>> baseDataGroup : baseDataGroups) {
+            // The content in the group is identical
+            byte[] base = baseDataGroup.get(0).getValue();
+
+            // Optimize the patch data if applicable
+            byte[] actualPatchData = patchedData;
+            if (options.isOptimizeConstantPool() && targetPath.endsWith(".class")) {
+                actualPatchData = shrinkDirtyForPatch(base, actualPatchData);
+            }
+
+            // Collect which bases this group comes from
+            EnumSet<PatchBase> baseTypes = EnumSet.noneOf(PatchBase.class);
+            for (Map.Entry<PatchBase, byte[]> groupEntry : baseDataGroup) {
+                baseTypes.add(groupEntry.getKey());
+            }
+
+            byte[] patchData = new Delta().compute(base, actualPatchData);
+            long checksum = checksum(base);
+            consumer.accept(new Patch(
+                    PatchOperation.MODIFY,
+                    targetPath,
+                    baseTypes,
+                    checksum,
+                    patchData
+            ));
+        }
+    }
+
+    private static String hashContent(byte[] value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return Base64.getEncoder().encodeToString(digest.digest(value));
+        } catch (NoSuchAlgorithmException e) {
+            throw new Error(e); // Standard JCA algorithm is missing
+        }
     }
 
     private static byte[] shrinkDirtyForPatch(byte[] clean, byte[] dirty) {
         if (clean.length == 0 || dirty.length == 0) {
             return dirty;
         }
-        final ClassReader cleanReader = new ClassReader(clean);
-        final ClassReader dirtyReader = new ClassReader(dirty);
-        final ClassWriter writer = new ClassWriter(cleanReader, 0);
+        ClassReader cleanReader = new ClassReader(clean);
+        ClassReader dirtyReader = new ClassReader(dirty);
+        ClassWriter writer = new ClassWriter(cleanReader, 0);
         dirtyReader.accept(writer, 0);
         return writer.toByteArray();
     }
 
-    public byte[] toBytes() {
-        return toBytes(false);
-    }
-    public byte[] toBytes(boolean legacy) {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream(data.length + obf.length() + srg.length() + 1);
-        DataOutputStream out = new DataOutputStream(bos);
-        try {
-            if (legacy) {
-                if (data.length == 0)
-                    return null; //Legacy doesn't support deleting, so just skip
-                out.writeUTF(obf);
-                out.writeUTF(obf.replace('/', '.'));
-                out.writeUTF(srg.replace('/', '.'));
-            } else {
-                out.writeByte(1); //Version -- Future compatibility
-                out.writeUTF(obf);
-                out.writeUTF(srg);
-            }
-            out.writeBoolean(exists); //Exists in clean
-            if (exists)
-                out.writeInt(checksum); //Adler32
-            out.writeInt(data.length); //If removed, diff.length == 0
-            out.write(data);
-            out.flush();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        return bos.toByteArray();
-    }
-
-    public static Patch from(InputStream stream) throws IOException {
-        return from(stream, false);
-    }
-    public static Patch from(InputStream stream, boolean legacy) throws IOException {
-        DataInputStream input = new DataInputStream(stream);
-        int version = -1;
-        String obf, srg;
-
-        if (legacy) {
-            obf = input.readUTF();
-            input.readUTF(); //Useless repeat of obf
-            srg = input.readUTF().replace('.', '/');
-        } else {
-            version = input.readByte() & 0xFF;
-            if (version != 1)
-                throw new IOException("Unsupported patch format: " + version);
-            obf = input.readUTF();
-            srg = input.readUTF();
-        }
-
-        boolean exists = input.readBoolean();
-        int checksum = exists ? input.readInt() : 0;
-        int length = input.readInt();
-        byte[] data = new byte[length];
-        input.readFully(data);
-
-        return new Patch(obf, srg, exists, checksum, data);
-    }
-
-    public String getName() {
-        if (srg.equals(obf))
-            return srg;
-        else
-            return srg + "(" + obf + ")";
-    }
-
-    public int checksum(byte[] data) {
-        return data.length == 0 ? 0 : adlerHash(data); //This is a instance method so we can check the version and do the proper hash, for now just adler
-    }
-
-    private static int adlerHash(byte[] input) {
+    public static long checksum(byte[] input) {
         Adler32 hasher = new Adler32();
         hasher.update(input);
-        return (int)hasher.getValue();
+        return hasher.getValue();
     }
 }

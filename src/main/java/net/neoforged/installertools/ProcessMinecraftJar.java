@@ -31,6 +31,9 @@ import net.neoforged.art.api.SignatureStripperConfig;
 import net.neoforged.art.api.SourceFixerConfig;
 import net.neoforged.art.api.Transformer;
 import net.neoforged.binarypatcher.Patch;
+import net.neoforged.binarypatcher.PatchBase;
+import net.neoforged.binarypatcher.PatchBundleReader;
+import net.neoforged.binarypatcher.PatchOperation;
 import net.neoforged.srgutils.IMappingFile;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -68,7 +71,6 @@ import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /**
@@ -86,6 +88,9 @@ public class ProcessMinecraftJar extends Task {
 
     public static final long NEW_ENTRY_ZIPTIME = 628041600000L;
 
+    private static final String ENTRYPOINT_CLIENT = "net/minecraft/client/main/Main.class";
+    private static final String ENTRYPOINT_SERVER = "net/minecraft/server/Main.class";
+
     @Override
     public void process(String[] args) throws IOException {
 
@@ -96,8 +101,8 @@ public class ProcessMinecraftJar extends Task {
         OptionSpec<File> inputMappingsArg = parser.accepts("input-mappings", "The official Mappings text-file matching the input jar.").withRequiredArg().ofType(File.class);
         OptionSpec<File> neoformDataArg = parser.accepts("neoform-data", "The NeoForm data file used for getting SRG parameter names, or a LZMA compressed NeoForm mappings file.").withRequiredArg().ofType(File.class);
         OptionSpec<File> outputArg = parser.accepts("output", "Where the resulting processed jar is written to.").withRequiredArg().ofType(File.class).required();
-        OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withOptionalArg().ofType(File.class);
-        OptionSpec<File> patchesArchiveArg = parser.accepts("apply-patches", "Path to a binpatch file with patches to apply. Multiple can be specified and will be applied in-order.").withOptionalArg().ofType(File.class);
+        OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withRequiredArg().ofType(File.class);
+        OptionSpec<File> patchBundleArg = parser.accepts("apply-patches", "Path to a binpatch bundle file with patches to apply.").withRequiredArg().ofType(File.class);
         OptionSpec<Void> noModManifest = parser.accepts("no-mod-manifest", "Disables adding a neoforge.mods.toml mod manifest");
 
         OptionSet options;
@@ -122,11 +127,11 @@ public class ProcessMinecraftJar extends Task {
         File librariesFolder = options.valueOf(outputLibrariesArg);
         File outputFile = options.valueOf(outputArg);
         File neoformDataFile = options.valueOf(neoformDataArg);
-        List<File> patchesArchiveFiles = options.valuesOf(patchesArchiveArg);
+        File patchBundleFile = options.valueOf(patchBundleArg);
 
         boolean addModManifest = !options.has(noModManifest);
 
-        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchesArchiveFiles, addModManifest);
+        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest);
 
         logElapsed("overall work", start);
     }
@@ -138,7 +143,7 @@ public class ProcessMinecraftJar extends Task {
                             File outputFile,
                             @Nullable File librariesFolder,
                             @Nullable File neoformDataFile,
-                            List<File> patchesArchiveFiles,
+                            @Nullable File patchBundleFile,
                             boolean addModManifest) {
 
         CompletableFuture<Map<String, InputFileEntry>> outputEntries;
@@ -161,10 +166,12 @@ public class ProcessMinecraftJar extends Task {
         }
 
         // If patches are supplied, apply them
-        if (!patchesArchiveFiles.isEmpty()) {
-            CompletableFuture<List<Patch>> patches = loadPatchLists(patchesArchiveFiles);
+        if (patchBundleFile != null) {
+            CompletableFuture<LoadedPatchBundle> patches = supplyAsync("load patch bundle", () -> loadPatchList(patchBundleFile));
 
-            outputEntries = outputEntries.thenCombineAsync(patches, this::applyPatches);
+            // We have a joined source distribution if both inputs are given
+            boolean joined = mergeInputFile != null;
+            outputEntries = outputEntries.thenCombineAsync(patches, (entries, bundle) -> applyPatches(entries, bundle, joined));
         }
 
         CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> {
@@ -210,45 +217,30 @@ public class ProcessMinecraftJar extends Task {
         return versionManifest.getAsJsonPrimitive("id").getAsString();
     }
 
-    private CompletableFuture<List<Patch>> loadPatchLists(List<File> patchesArchiveFiles) {
-        if (patchesArchiveFiles.size() == 1) {
-            // Simplified form if only a single patch list is given
-            File archiveFile = patchesArchiveFiles.get(0);
-            return supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchList(archiveFile, null));
-        }
-
-        List<List<Patch>> patchLists = new ArrayList<>(patchesArchiveFiles.size());
-        for (int i = 0; i < patchesArchiveFiles.size(); i++) {
-            patchLists.add(null); // Pre-allocate the list
-        }
-
-        CompletableFuture<?>[] patchesLoadFutures = new CompletableFuture[patchesArchiveFiles.size()];
-        for (int i = 0; i < patchesArchiveFiles.size(); i++) {
-            int patchListIndex = i;
-            File archiveFile = patchesArchiveFiles.get(i);
-            patchesLoadFutures[i] = supplyAsync("load patches " + archiveFile.getName(), () -> loadPatchList(archiveFile, null))
-                    .thenAccept(patchList -> patchLists.set(patchListIndex, patchList));
-        }
-        // Merge the patch lists into a single list
-        return CompletableFuture.allOf(patchesLoadFutures).thenApply(unused -> {
-            // Merge the patch lists
-            int overallSize = patchLists.stream().mapToInt(List::size).sum();
-            List<Patch> patchList = new ArrayList<>(overallSize);
-            patchLists.forEach(patchList::addAll);
-            return patchList;
-        });
-    }
-
-    private Map<String, InputFileEntry> applyPatches(Map<String, InputFileEntry> entries, List<Patch> patches) {
+    private Map<String, InputFileEntry> applyPatches(Map<String, InputFileEntry> entries, LoadedPatchBundle bundle, boolean joined) {
         long start = System.nanoTime();
+
+        PatchBase baseType;
+        if (joined) {
+            baseType = PatchBase.JOINED;
+        } else if (entries.containsKey(ENTRYPOINT_CLIENT)) {
+            baseType = PatchBase.CLIENT;
+        } else {
+            baseType = PatchBase.SERVER;
+        }
+
+        if (!bundle.supportedBaseTypes.contains(baseType)) {
+            throw new IllegalStateException("Patch bundle supports " + bundle.supportedBaseTypes
+                    + " but the base is of type " + baseType);
+        }
 
         GDiffPatcher patcher = new GDiffPatcher();
 
-        for (Patch patch : patches) {
+        for (Patch patch : bundle.patches) {
             try {
                 applyPatch(entries, patch, patcher);
             } catch (IOException e) {
-                throw new UncheckedIOException("Failed to apply patch file " + patch.getName(), e);
+                throw new UncheckedIOException("Failed to apply patch file " + patch.getTargetPath(), e);
             }
         }
 
@@ -257,53 +249,46 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private static void applyPatch(Map<String, InputFileEntry> entries, Patch patch, GDiffPatcher patcher) throws IOException {
-        String patchedPath = patch.obf + ".class";
+        String patchedPath = patch.getTargetPath();
 
         InputFileEntry entry = entries.get(patchedPath);
         if (entry == null) {
-            if (patch.exists) {
-                throw new IOException("Patch expected " + patch.getName() + " to exist, but received empty data");
+            if (patch.getOperation() != PatchOperation.CREATE) {
+                throw new IOException("Patch expected " + patch.getTargetPath() + " to exist, but received empty data");
             }
 
             // Create a new synthetic entry
             entry = new InputFileEntry(patchedPath, NEW_ENTRY_ZIPTIME, new byte[0]);
         } else {
-            if (!patch.exists) {
-                throw new IOException("Patch expected " + patch.getName() + " to not exist, but entry exists");
+            if (patch.getOperation() == PatchOperation.CREATE) {
+                throw new IOException("Patch expected " + patch.getTargetPath() + " to not exist, but entry exists");
             }
         }
 
-        int checksum = patch.checksum(entry.content);
-        if (checksum != patch.checksum) {
-            throw new IOException("Patch expected " + patch.getName() + " to have the checksum " + Integer.toHexString(patch.checksum) + " but it was " + Integer.toHexString(checksum));
+        long checksum = Patch.checksum(entry.content);
+        if (checksum != patch.getBaseChecksumUnsigned()) {
+            throw new IOException("Patch expected " + patch.getTargetPath() + " to have the checksum " + Long.toHexString(patch.getBaseChecksumUnsigned()) + " but it was " + Long.toHexString(checksum));
         }
 
-        if (patch.data.length == 0) {
+        if (patch.getOperation() == PatchOperation.REMOVE) {
             entries.remove(patchedPath); //File removed
+        } else if (patch.getOperation() == PatchOperation.CREATE) {
+            entry = new InputFileEntry(entry.name, NEW_ENTRY_ZIPTIME, patch.getData());
+            entries.put(entry.name, entry);
         } else {
-            entry = new InputFileEntry(entry.name, NEW_ENTRY_ZIPTIME, patcher.patch(entry.content, patch.data));
+            entry = new InputFileEntry(entry.name, entry.getLastModified(), patcher.patch(entry.content, patch.getData()));
             entries.put(entry.name, entry);
         }
     }
 
-    private List<Patch> loadPatchList(File patchesArchiveFile, String prefix) throws IOException {
-        List<Patch> patches = new ArrayList<>();
-
-        try (InputStream input = new FileInputStream(patchesArchiveFile)) {
-            InputStream stream = new LZMAInputStream(new BufferedInputStream(input));
-            ZipInputStream zip = new ZipInputStream(new BufferedInputStream(stream));
-
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                String name = entry.getName();
-                if (name.endsWith(".binpatch") && (prefix == null || name.startsWith(prefix + '/'))) {
-                    Patch patch = Patch.from(zip, false);
-                    patches.add(patch);
-                }
+    private LoadedPatchBundle loadPatchList(File patchBundleFile) throws IOException {
+        try (PatchBundleReader bundleReader = new PatchBundleReader(patchBundleFile)) {
+            List<Patch> patches = new ArrayList<>(bundleReader.getEntryCount());
+            for (Patch patch : bundleReader) {
+                patches.add(patch);
             }
+            return new LoadedPatchBundle(bundleReader.getSupportedBaseTypes(), patches);
         }
-
-        return patches;
     }
 
     private static IMappingFile loadMappings(File inputMappingsFile) throws IOException {
@@ -417,8 +402,8 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private static String detectDistribution(Map<String, InputFileEntry> entries) throws IOException {
-        boolean hasClientEntrypoint = entries.containsKey("net/minecraft/client/main/Main.class");
-        boolean hasServerEntrypoint = entries.containsKey("net/minecraft/server/Main.class");
+        boolean hasClientEntrypoint = entries.containsKey(ENTRYPOINT_CLIENT);
+        boolean hasServerEntrypoint = entries.containsKey(ENTRYPOINT_SERVER);
 
         if (!hasClientEntrypoint && hasServerEntrypoint) {
             return DIST_SERVER;
@@ -653,5 +638,14 @@ public class ProcessMinecraftJar extends Task {
                 STABLE_TIMESTAMP,
                 modManifest.getBytes(StandardCharsets.UTF_8)
         );
+    }
+
+    private static final class LoadedPatchBundle {
+        final Set<PatchBase> supportedBaseTypes;
+        final List<Patch> patches;
+        public LoadedPatchBundle(Set<PatchBase> supportedBaseTypes, List<Patch> patches) {
+            this.supportedBaseTypes = supportedBaseTypes;
+            this.patches = patches;
+        }
     }
 }
