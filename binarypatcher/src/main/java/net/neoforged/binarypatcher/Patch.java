@@ -120,7 +120,7 @@ public class Patch {
         }
 
         // If the file wasn't removed, emit a CREATE patch for all bases that did not contain the file
-        EnumSet<PatchBase> basesWithoutFile = EnumSet.allOf(PatchBase.class);
+        EnumSet<PatchBase> basesWithoutFile = EnumSet.copyOf(baseData.keySet());
         basesWithoutFile.removeAll(basesWithFile);
         if (!basesWithoutFile.isEmpty()) {
             consumer.accept(new Patch(

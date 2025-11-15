@@ -97,10 +97,11 @@ public class PatchBundleWriter implements AutoCloseable {
         }
     }
     
-    private void validateEntry(EnumSet<PatchBase> entryDistributions, final String targetPath) {
+    private void validateEntry(EnumSet<PatchBase> entryDistributions, String targetPath) {
         if (closed) {
             throw new IllegalStateException("Bundle already closed");
         }
+        validatePath(targetPath);
         if (entryDistributions.isEmpty()) {
             throw new IllegalArgumentException(String.format("Entry '%s' must target at least one distribution", targetPath));
         }
@@ -157,6 +158,13 @@ public class PatchBundleWriter implements AutoCloseable {
         if (path == null || path.isEmpty()) {
             throw new IllegalArgumentException("Path cannot be null or empty");
         }
+
+        // It has to be representable as 7-bit ASCII without special characters.
+        path.codePoints().forEach(codePoint -> {
+            if (codePoint < 0x20 || codePoint > 0x7E) {
+                throw new IllegalArgumentException("Path '" + path + "' contains invalid characters.");
+            }
+        });
         
         String[] segments = path.split("/", -1);
         for (String segment : segments) {

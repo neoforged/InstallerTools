@@ -51,4 +51,19 @@ public class Util {
             target.write(buf, 0, length);
         }
     }
+
+    static ZipEntry copyEntry(ZipEntry entry) {
+        ZipEntry newEntry = new ZipEntry(entry.getName());
+        newEntry.setTime(entry.getTime());
+        if (entry.getLastModifiedTime() != null) {
+            newEntry.setLastModifiedTime(entry.getLastModifiedTime());
+        }
+        if (entry.getLastAccessTime() != null) {
+            newEntry.setLastAccessTime(entry.getLastAccessTime());
+        }
+        if (entry.getCreationTime() != null) {
+            newEntry.setCreationTime(entry.getCreationTime());
+        }
+        return newEntry;
+    }
 }

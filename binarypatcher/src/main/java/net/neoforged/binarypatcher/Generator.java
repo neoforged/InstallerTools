@@ -8,6 +8,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.EnumMap;
 import java.util.Enumeration;
@@ -33,8 +34,8 @@ public final class Generator {
         Map<PatchBase, ZipFile> baseZipFiles = new EnumMap<>(PatchBase.class);
 
         try (ZipFile modifiedZipFile = new ZipFile(modifiedFile);
-             FileOutputStream bundleOut = new FileOutputStream(patchBundleFile);
-             PatchBundleWriter bundleWriter = new PatchBundleWriter(new BufferedOutputStream(bundleOut), baseFiles.keySet())) {
+             OutputStream bundleOut = new BufferedOutputStream(new FileOutputStream(patchBundleFile));
+             PatchBundleWriter bundleWriter = new PatchBundleWriter(bundleOut, baseFiles.keySet())) {
 
             // Collect all unique filenames first, then process them
             Set<String> allTargetPaths = new TreeSet<>();
