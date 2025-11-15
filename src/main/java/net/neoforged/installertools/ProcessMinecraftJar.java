@@ -265,20 +265,22 @@ public class ProcessMinecraftJar extends Task {
             }
         }
 
+        if (patch.getOperation() == PatchOperation.REMOVE) {
+            entries.remove(patchedPath); //File removed
+            return;
+        }
+
         long checksum = Patch.checksum(entry.content);
         if (checksum != patch.getBaseChecksumUnsigned()) {
             throw new IOException("Patch expected " + patch.getTargetPath() + " to have the checksum " + Long.toHexString(patch.getBaseChecksumUnsigned()) + " but it was " + Long.toHexString(checksum));
         }
 
-        if (patch.getOperation() == PatchOperation.REMOVE) {
-            entries.remove(patchedPath); //File removed
-        } else if (patch.getOperation() == PatchOperation.CREATE) {
+        if (patch.getOperation() == PatchOperation.CREATE) {
             entry = new InputFileEntry(entry.name, NEW_ENTRY_ZIPTIME, patch.getData());
-            entries.put(entry.name, entry);
         } else {
             entry = new InputFileEntry(entry.name, entry.getLastModified(), patcher.patch(entry.content, patch.getData()));
-            entries.put(entry.name, entry);
         }
+        entries.put(entry.name, entry);
     }
 
     private LoadedPatchBundle loadPatchList(File patchBundleFile) throws IOException {
