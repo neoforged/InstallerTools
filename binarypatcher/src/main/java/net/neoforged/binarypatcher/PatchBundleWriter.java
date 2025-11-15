@@ -38,7 +38,7 @@ public class PatchBundleWriter implements AutoCloseable {
      */
     public void writeCreateEntry(String targetPath, byte[] fileContent, 
                                   EnumSet<PatchBase> entryDistributions) throws IOException {
-        validateEntry(entryDistributions);
+        validateEntry(entryDistributions, targetPath);
         int flags = ENTRY_TYPE_CREATE | PatchBase.toBitfield(entryDistributions);
         writeEntryInternal(flags, targetPath, 0, fileContent);
     }
@@ -48,7 +48,7 @@ public class PatchBundleWriter implements AutoCloseable {
      */
     public void writeModifyEntry(String targetPath, long baseChecksum, byte[] patchData,
                                   EnumSet<PatchBase> entryDistributions) throws IOException {
-        validateEntry(entryDistributions);
+        validateEntry(entryDistributions, targetPath);
         if (baseChecksum < 0 || baseChecksum > 0xFFFFFFFFL) {
             throw new IllegalArgumentException("Base checksum must be a valid 32-bit unsigned value");
         }
@@ -61,7 +61,7 @@ public class PatchBundleWriter implements AutoCloseable {
      */
     public void writeRemoveEntry(String targetPath, EnumSet<PatchBase> entryDistributions)
             throws IOException {
-        validateEntry(entryDistributions);
+        validateEntry(entryDistributions, targetPath);
         int flags = ENTRY_TYPE_REMOVE | PatchBase.toBitfield(entryDistributions);
         writeEntryInternal(flags, targetPath, 0, new byte[0]);
     }
@@ -97,17 +97,17 @@ public class PatchBundleWriter implements AutoCloseable {
         }
     }
     
-    private void validateEntry(EnumSet<PatchBase> entryDistributions) {
+    private void validateEntry(EnumSet<PatchBase> entryDistributions, final String targetPath) {
         if (closed) {
             throw new IllegalStateException("Bundle already closed");
         }
         if (entryDistributions.isEmpty()) {
-            throw new IllegalArgumentException("Entry must target at least one distribution");
+            throw new IllegalArgumentException(String.format("Entry '%s' must target at least one distribution", targetPath));
         }
         for (PatchBase dist : entryDistributions) {
             if (!bundleDistributions.contains(dist)) {
                 throw new IllegalArgumentException(
-                    "Entry targets distribution " + dist + " not declared in bundle");
+                    String.format("Entry '%s' targets distribution %s not declared in bundle", targetPath, dist));
             }
         }
     }
