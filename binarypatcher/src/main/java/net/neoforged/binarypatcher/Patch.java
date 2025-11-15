@@ -126,7 +126,7 @@ public class Patch {
             consumer.accept(new Patch(
                     PatchOperation.CREATE,
                     targetPath,
-                    basesWithFile,
+                    basesWithoutFile,
                     null,
                     patchedData
             ));
