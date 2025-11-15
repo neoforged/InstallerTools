@@ -111,7 +111,7 @@ class PatchBundleWriterTest {
                 writer.writeCreateEntry("test.txt", new byte[0],
                         EnumSet.noneOf(PatchBase.class)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Entry must target at least one distribution");
+                .hasMessageContaining("Entry 'test.txt' must target at least one distribution");
     }
 
     @Test
