@@ -57,9 +57,10 @@ public class Patch {
     /**
      * Checksum for the base file of the patch.
      * <p>
-     *     Only available for entries where {@link #getOperation()} is {@link PatchOperation#MODIFY}.
-     *     Otherwise, the value is -1.
+     * Only available for entries where {@link #getOperation()} is {@link PatchOperation#MODIFY}.
+     * Otherwise, the value is -1.
      * </p>
+     *
      * @return The base files checksum, or -1 if not available.
      */
     public long getBaseChecksum() {
@@ -85,7 +86,6 @@ public class Patch {
         }
         return baseChecksum & 0xFFFFFFFFL;
     }
-
 
     /**
      * @param baseData    Null values indicate that the patch base did not contain the target path.
@@ -120,7 +120,7 @@ public class Patch {
         }
 
         // If the file wasn't removed, emit a CREATE patch for all bases that did not contain the file
-        EnumSet<PatchBase> basesWithoutFile = EnumSet.allOf(PatchBase.class);
+        EnumSet<PatchBase> basesWithoutFile = EnumSet.copyOf(baseData.keySet());
         basesWithoutFile.removeAll(basesWithFile);
         if (!basesWithoutFile.isEmpty()) {
             consumer.accept(new Patch(
@@ -170,6 +170,50 @@ public class Patch {
                     patchData
             ));
         }
+    }
+
+    public static Patch createAdd(String targetPath,
+                                  byte[] patchedData,
+                                  EnumSet<PatchBase> bases) {
+        return new Patch(
+                PatchOperation.CREATE,
+                targetPath,
+                bases,
+                null,
+                patchedData
+        );
+    }
+
+    public static Patch createRemove(String targetPath, EnumSet<PatchBase> bases) {
+        return new Patch(
+                PatchOperation.REMOVE,
+                targetPath,
+                bases,
+                null,
+                null
+        );
+    }
+
+    public static Patch createModified(String targetPath,
+                                       byte[] baseData,
+                                       byte[] patchedData,
+                                       EnumSet<PatchBase> bases,
+                                       DiffOptions options) throws IOException {
+        // Optimize the patch data if applicable
+        byte[] actualPatchData = patchedData;
+        if (options.isOptimizeConstantPool() && targetPath.endsWith(".class")) {
+            actualPatchData = shrinkDirtyForPatch(baseData, actualPatchData);
+        }
+
+        byte[] patchData = new Delta().compute(baseData, actualPatchData);
+        long checksum = checksum(baseData);
+        return new Patch(
+                PatchOperation.MODIFY,
+                targetPath,
+                bases,
+                checksum,
+                patchData
+        );
     }
 
     private static String hashContent(byte[] value) {

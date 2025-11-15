@@ -5,7 +5,6 @@
 package net.neoforged.binarypatcher;
 
 import com.nothome.delta.GDiffPatcher;
-import net.neoforged.cliutils.progress.ProgressReporter;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -23,7 +22,6 @@ import java.util.zip.ZipOutputStream;
 
 public class Patcher {
     static final byte[] DELETION_MARKER = new byte[0];
-    private static final ProgressReporter PROGRESS = ProgressReporter.getDefault();
     private static final long ZIPTIME = 628041600000L;
 
     private Patcher() {
@@ -54,7 +52,10 @@ public class Patcher {
                         debug("Deleting " + entry.getName());
                         continue; // Skip deleted file
                     } else  {
-                        zOut.putNextEntry(entry);
+                        // We must create a new entry since we cannot reset the CRC to -1
+                        ZipEntry newEntry = Util.copyEntry(entry);
+
+                        zOut.putNextEntry(newEntry);
                         if (patched != null) {
                             zOut.write(patched); // Write patched content
                         } else {

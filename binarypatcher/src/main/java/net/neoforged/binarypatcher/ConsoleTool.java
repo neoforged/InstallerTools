@@ -24,7 +24,9 @@ public class ConsoleTool {
         OptionSpec<File> clientBaseO = parser.accepts("base-client").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> serverBaseO = parser.accepts("base-server").availableIf(diffO).withRequiredArg().ofType(File.class);
         OptionSpec<File> joinedBaseO = parser.accepts("base-joined").availableIf(diffO).withRequiredArg().ofType(File.class);
-        OptionSpec<File> modifiedO = parser.accepts("modified").requiredIf(diffO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> clientModifiedO = parser.accepts("modified-client").availableIf(diffO, clientBaseO).requiredIf(clientBaseO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> serverModifiedO = parser.accepts("modified-server").availableIf(diffO, serverBaseO).requiredIf(serverBaseO).withRequiredArg().ofType(File.class);
+        OptionSpec<File> joinedModifiedO = parser.accepts("modified-joined").availableIf(diffO, joinedBaseO).requiredIf(joinedBaseO).withRequiredArg().ofType(File.class);
         OptionSpec<Void> optimizeConstantPoolO = parser.accepts("optimize-constantpool").availableIf(diffO);
 
         // Apply arguments
@@ -55,20 +57,22 @@ public class ConsoleTool {
                 err("Could not make output folders: " + output.getParentFile());
 
             if (options.has(diffO)) {
-                File modifiedFile = options.valueOf(modifiedO);
-
                 Map<PatchBase, File> baseFiles = new EnumMap<>(PatchBase.class);
+                Map<PatchBase, File> modifiedFiles = new EnumMap<>(PatchBase.class);
                 File clientBase = options.valueOf(clientBaseO);
                 if (clientBase != null) {
                     baseFiles.put(PatchBase.CLIENT, clientBase);
+                    modifiedFiles.put(PatchBase.CLIENT, Objects.requireNonNull(options.valueOf(clientModifiedO)));
                 }
                 File serverBase = options.valueOf(serverBaseO);
                 if (serverBase != null) {
                     baseFiles.put(PatchBase.SERVER, serverBase);
+                    modifiedFiles.put(PatchBase.SERVER, Objects.requireNonNull(options.valueOf(serverModifiedO)));
                 }
                 File joinedBase = options.valueOf(joinedBaseO);
                 if (joinedBase != null) {
                     baseFiles.put(PatchBase.JOINED, joinedBase);
+                    modifiedFiles.put(PatchBase.JOINED, Objects.requireNonNull(options.valueOf(joinedModifiedO)));
                 }
                 if (baseFiles.isEmpty()) {
                     err("A base file must be given via any combination of --base-client, --base-server, --base-joined");
@@ -76,7 +80,7 @@ public class ConsoleTool {
 
                 log("Generating: ");
                 log("  Bases:  " + baseFiles);
-                log("  Modified:  " + modifiedFile);
+                log("  Modified:  " + modifiedFiles);
                 log("  Output:  " + output);
                 log("Diff Options: ");
                 log("  Optimize Constant Table: " + optimizeConstantPool);
@@ -85,7 +89,7 @@ public class ConsoleTool {
                 diffOptions.setOptimizeConstantPool(optimizeConstantPool);
                 Generator.createPatchBundle(
                         baseFiles,
-                        modifiedFile,
+                        modifiedFiles,
                         output,
                         diffOptions);
 

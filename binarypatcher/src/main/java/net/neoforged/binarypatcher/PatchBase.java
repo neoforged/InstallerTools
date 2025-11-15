@@ -16,10 +16,6 @@ public enum PatchBase {
         this.mask = mask;
     }
 
-    int getMask() {
-        return mask;
-    }
-
     static int toBitfield(EnumSet<PatchBase> distributions) {
         int result = 0;
         for (PatchBase dist : distributions) {
