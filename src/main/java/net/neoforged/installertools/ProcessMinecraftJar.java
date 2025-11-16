@@ -270,14 +270,14 @@ public class ProcessMinecraftJar extends Task {
             return;
         }
 
-        long checksum = Patch.checksum(entry.content);
-        if (checksum != patch.getBaseChecksumUnsigned()) {
-            throw new IOException("Patch expected " + patch.getTargetPath() + " to have the checksum " + Long.toHexString(patch.getBaseChecksumUnsigned()) + " but it was " + Long.toHexString(checksum));
-        }
-
         if (patch.getOperation() == PatchOperation.CREATE) {
             entry = new InputFileEntry(entry.name, NEW_ENTRY_ZIPTIME, patch.getData());
         } else {
+            long checksum = Patch.checksum(entry.content);
+            if (checksum != patch.getBaseChecksumUnsigned()) {
+                throw new IOException("Patch expected " + patch.getTargetPath() + " to have the checksum " + Long.toHexString(patch.getBaseChecksumUnsigned()) + " but it was " + Long.toHexString(checksum));
+            }
+
             entry = new InputFileEntry(entry.name, entry.getLastModified(), patcher.patch(entry.content, patch.getData()));
         }
         entries.put(entry.name, entry);
