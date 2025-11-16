@@ -1,5 +1,7 @@
 package net.neoforged.binarypatcher;
 
+import org.tukaani.xz.LZMAInputStream;
+
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.File;
@@ -40,7 +42,7 @@ public class PatchBundleReader implements Iterable<Patch>, AutoCloseable {
     }
 
     public PatchBundleReader(InputStream input) throws IOException {
-        this.input = new DataInputStream(input);
+        this.input = new DataInputStream(new LZMAInputStream(input));
 
         // Read and validate signature
         byte[] signature = new byte[BUNDLE_SIGNATURE.length];

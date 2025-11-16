@@ -5,6 +5,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.tukaani.xz.LZMA2Options;
+import org.tukaani.xz.LZMAOutputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -32,7 +34,7 @@ class PatchBundleReaderTest {
         byte[] invalidData = "INVALID_SIGNATURE".getBytes();
 
         assertThatThrownBy(() ->
-                new PatchBundleReader(new ByteArrayInputStream(invalidData)))
+                new PatchBundleReader(new ByteArrayInputStream(compress(invalidData))))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("Invalid bundle signature");
     }
@@ -306,7 +308,7 @@ class PatchBundleReaderTest {
         data[BUNDLE_SIGNATURE.length + 3] = (byte) 0xFF;
 
         assertThatThrownBy(() ->
-                new PatchBundleReader(new ByteArrayInputStream(data)))
+                new PatchBundleReader(new ByteArrayInputStream(compress(data))))
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("Invalid entry count");
     }
@@ -329,7 +331,7 @@ class PatchBundleReaderTest {
 
         assertThatThrownBy(() -> {
             try (PatchBundleReader reader = new PatchBundleReader(
-                    new ByteArrayInputStream(baos.toByteArray()))) {
+                    new ByteArrayInputStream(compress(baos.toByteArray())))) {
                 reader.readEntry();
             }
         }).isInstanceOf(IOException.class)
@@ -353,7 +355,7 @@ class PatchBundleReaderTest {
 
         assertThatThrownBy(() -> {
             try (PatchBundleReader reader = new PatchBundleReader(
-                    new ByteArrayInputStream(baos.toByteArray()))) {
+                    new ByteArrayInputStream(compress(baos.toByteArray())))) {
                 reader.readEntry();
             }
         }).isInstanceOf(IOException.class)
@@ -378,11 +380,19 @@ class PatchBundleReaderTest {
 
         assertThatThrownBy(() -> {
             try (PatchBundleReader reader = new PatchBundleReader(
-                    new ByteArrayInputStream(baos.toByteArray()))) {
+                    new ByteArrayInputStream(compress(baos.toByteArray())))) {
                 reader.readEntry();
             }
         }).isInstanceOf(IOException.class)
                 .hasMessageContaining("REMOVE entry must have data length of 0");
+    }
+
+    private byte[] compress(byte[] byteArray) throws IOException {
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (LZMAOutputStream out = new LZMAOutputStream(compressed, new LZMA2Options(), byteArray.length)) {
+            out.write(byteArray);
+        }
+        return compressed.toByteArray();
     }
 
     @Test

@@ -1,5 +1,8 @@
 package net.neoforged.binarypatcher;
 
+import org.tukaani.xz.LZMA2Options;
+import org.tukaani.xz.LZMAOutputStream;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -84,14 +87,23 @@ public class PatchBundleWriter implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (!closed) {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+
             // Write header
-            DataOutputStream dos = new DataOutputStream(output);
+            DataOutputStream dos = new DataOutputStream(buffer);
             dos.write(BUNDLE_SIGNATURE);
             dos.writeInt(entryCount);
             dos.writeByte(PatchBase.toBitfield(bundleDistributions));
 
             // Write all buffered entries
-            entryBuffer.writeTo(output);
+            entryBuffer.writeTo(buffer);
+
+            LZMA2Options options = new LZMA2Options();
+            try (LZMAOutputStream lzmaOutput = new LZMAOutputStream(output, options, buffer.size())) {
+                lzmaOutput.write(buffer.toByteArray());
+            }
+
+            output.close();
 
             closed = true;
         }

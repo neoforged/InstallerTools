@@ -6,7 +6,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.tukaani.xz.LZMAInputStream;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
@@ -35,8 +37,8 @@ class PatchBundleWriterTest {
                     EnumSet.of(PatchBase.CLIENT));
         }
 
-        DataInputStream dis = new DataInputStream(
-                new java.io.ByteArrayInputStream(baos.toByteArray()));
+        DataInputStream dis = new DataInputStream(new LZMAInputStream(
+                new ByteArrayInputStream(baos.toByteArray())));
         dis.skip(BUNDLE_SIGNATURE.length);
         int entryCount = dis.readInt();
 
@@ -51,8 +53,8 @@ class PatchBundleWriterTest {
 
         new PatchBundleWriter(baos, distributions).close();
 
-        DataInputStream dis = new DataInputStream(
-                new java.io.ByteArrayInputStream(baos.toByteArray()));
+        DataInputStream dis = new DataInputStream(new LZMAInputStream(
+                new ByteArrayInputStream(baos.toByteArray())));
         dis.skip(BUNDLE_SIGNATURE.length);
         dis.readInt(); // skip entry count
         int distBitfield = dis.readUnsignedByte();
@@ -76,7 +78,7 @@ class PatchBundleWriterTest {
 
         // Verify we can read all entries back
         try (PatchBundleReader reader = new PatchBundleReader(
-                new java.io.ByteArrayInputStream(baos.toByteArray()))) {
+                new ByteArrayInputStream(baos.toByteArray()))) {
             assertThat(reader.getEntryCount()).isEqualTo(3);
 
             Patch e1 = reader.readEntry();
@@ -194,7 +196,7 @@ class PatchBundleWriterTest {
         new PatchBundleWriter(baos, EnumSet.of(PatchBase.CLIENT)).close();
 
         try (PatchBundleReader reader = new PatchBundleReader(
-                new java.io.ByteArrayInputStream(baos.toByteArray()))) {
+                new ByteArrayInputStream(baos.toByteArray()))) {
             assertThat(reader.getEntryCount()).isEqualTo(0);
             assertThat(reader.hasMoreEntries()).isFalse();
         }
