@@ -237,6 +237,9 @@ public class ProcessMinecraftJar extends Task {
         GDiffPatcher patcher = new GDiffPatcher();
 
         for (Patch patch : bundle.patches) {
+            if (!patch.getBaseTypes().contains(baseType)) {
+                continue;
+            }
             try {
                 applyPatch(entries, patch, patcher);
             } catch (IOException e) {
