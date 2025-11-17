@@ -52,7 +52,7 @@ Only characters from the range 0x20 to 0x7E (inclusive) are allowed.
 Paths referred to by entries are expressed as follows:
 
 - Path segments are separated by a single `/`
-- Path segments are not empty
+- Path segments are not empty (this means leading slashes are also disallowed)
 - Path segments must not be equal to `.` or `..`
 - Paths only ever refer to files, never to folders
 - Paths are case-sensitive
