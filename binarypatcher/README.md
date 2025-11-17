@@ -66,8 +66,8 @@ Patches can be built against three different types of base jars:
 - The merged client and server jars ("joined"), as created by the PROCESS_JAR installertools task.
 
 The header of a bundle as well as each patch in it define the base jars it supports.
-It's possible for a bundle to declare it was built against a jar while not containing any patches for it (if it was not
-modified), a patch must not declare a distribution that was not defined in the bundle header.
+It's possible for a bundle to declare it was built against a jar, while not containing any patches for it.
+A patch must not declare a distribution that was not defined in the bundle header.
 
 | Bitmask | Description                                |
 |---------|--------------------------------------------|
