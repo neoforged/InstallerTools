@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -155,58 +156,84 @@ public class ConsoleTool {
 
         try (PatchBundleReader reader = new PatchBundleReader(patchBundleFile)) {
             List<PatchBase> bases = new ArrayList<>(reader.getSupportedBaseTypes());
-            int colCount = 3 + bases.size();
+            int colCount = 4 + bases.size();
 
             // Create a header row (both to be used for determining column width and printing it)
             String[] headerRow = new String[colCount];
             headerRow[0] = "Path";
             headerRow[1] = "Operation";
             headerRow[2] = "Base Checksum";
+            headerRow[3] = "Size";
             for (int i = 0; i < bases.size(); i++) {
-                headerRow[3 + i] = bases.get(i).name();
+                headerRow[4 + i] = bases.get(i).name();
             }
             rows.add(headerRow);
+
+            List<Object[]> patchSizes = new ArrayList<>(reader.getEntryCount());
 
             for (Patch patch : reader) {
                 String[] col = new String[colCount];
                 col[0] = patch.getTargetPath();
                 col[1] = patch.getOperation().name();
                 col[2] = patch.getOperation() == PatchOperation.MODIFY ? Long.toHexString(patch.getBaseChecksumUnsigned()) : "";
+                col[3] = patch.getOperation() != PatchOperation.REMOVE ? String.valueOf(patch.getData().length) : "";
                 for (int i = 0; i < bases.size(); i++) {
-                    col[3 + i] = patch.getBaseTypes().contains(bases.get(i)) ? "X" : "";
+                    col[4 + i] = patch.getBaseTypes().contains(bases.get(i)) ? "X" : "";
                 }
                 rows.add(col);
-            }
 
-            // Determine col widths
-            int[] colWidths = new int[colCount];
-            for (String[] row : rows) {
-                for (int i = 0; i < row.length; i++) {
-                    colWidths[i] = Math.max(colWidths[i], row[i].length());
+                // Record the patch size so we can print a report on the largest patches
+                if (patch.getOperation() == PatchOperation.MODIFY) {
+                    patchSizes.add(new Object[]{patch.getTargetPath(), patch.getData().length});
                 }
             }
 
-            // Print a nice Markdown Table
-            boolean printingHeaderRow = true;
-            for (String[] row : rows) {
-                for (int i = 0; i < row.length; i++) {
-                    String s = row[i];
+            printMarkdownTable(rows);
+            System.out.println();
+
+            // Sort by patch size in descending order. Skip CREATE since their size is obvious.
+            patchSizes.sort(Comparator.comparingInt((Object[] row) -> (int) row[1]).reversed());
+            System.out.println("Largest MODIFY patches:");
+            System.out.println();
+            List<String[]> maxSizeRows = new ArrayList<>(11);
+            maxSizeRows.add(new String[]{"Target Path", "Size"});
+            for (int i = 0; i < Math.min(10, patchSizes.size()); i++) {
+                maxSizeRows.add(new String[]{patchSizes.get(i)[0].toString(), patchSizes.get(i)[1].toString()});
+            }
+            printMarkdownTable(maxSizeRows);
+
+        }
+    }
+
+    private static void printMarkdownTable(List<String[]> rows) {
+        // Determine col widths
+        int[] colWidths = new int[rows.get(0).length];
+        for (String[] row : rows) {
+            for (int i = 0; i < row.length; i++) {
+                colWidths[i] = Math.max(colWidths[i], row[i].length());
+            }
+        }
+
+        // Print a nice Markdown Table
+        boolean printingHeaderRow = true;
+        for (String[] row : rows) {
+            for (int i = 0; i < row.length; i++) {
+                String s = row[i];
+                System.out.print("| ");
+                System.out.print(s);
+                System.out.print(repeat(' ', colWidths[i] - s.length()));
+                System.out.print(" ");
+            }
+            System.out.print(" |");
+            System.out.println();
+            if (printingHeaderRow) {
+                for (int colWidth : colWidths) {
                     System.out.print("| ");
-                    System.out.print(s);
-                    System.out.print(repeat(' ', colWidths[i] - s.length()));
+                    System.out.print(repeat('-', colWidth));
                     System.out.print(" ");
                 }
-                System.out.print(" |");
-                System.out.println();
-                if (printingHeaderRow) {
-                    for (int colWidth : colWidths) {
-                        System.out.print("| ");
-                        System.out.print(repeat('-', colWidth));
-                        System.out.print(" ");
-                    }
-                    System.out.println(" |");
-                    printingHeaderRow = false;
-                }
+                System.out.println(" |");
+                printingHeaderRow = false;
             }
         }
     }
