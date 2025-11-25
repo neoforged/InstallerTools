@@ -18,6 +18,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 public class ConsoleTool {
     public static final boolean DEBUG = Boolean.getBoolean("net.neoforged.binarypatcher.debug");
@@ -39,6 +40,8 @@ public class ConsoleTool {
         OptionSpec<File> serverModifiedO = parser.accepts("modified-server").availableIf(diffO, serverBaseO).requiredIf(serverBaseO).withRequiredArg().ofType(File.class);
         OptionSpec<File> joinedModifiedO = parser.accepts("modified-joined").availableIf(diffO, joinedBaseO).requiredIf(joinedBaseO).withRequiredArg().ofType(File.class);
         OptionSpec<Void> optimizeConstantPoolO = parser.accepts("optimize-constantpool").availableIf(diffO);
+        OptionSpec<String> includeO = parser.accepts("include").availableIf(diffO).withRequiredArg().ofType(String.class);
+        OptionSpec<String> excludeO = parser.accepts("exclude").availableIf(diffO).withRequiredArg().ofType(String.class);
 
         // Apply arguments
         OptionSpec<File> patchesO = parser.accepts("patches").requiredIf(patchO, listO).withRequiredArg().ofType(File.class);
@@ -63,9 +66,7 @@ public class ConsoleTool {
                 return;
             }
 
-
             File output = options.valueOf(outputO).getAbsoluteFile();
-            boolean optimizeConstantPool = options.has(optimizeConstantPoolO);
 
             if (output.exists() && !output.delete())
                 err("Could not delete output file: " + output);
@@ -74,6 +75,9 @@ public class ConsoleTool {
                 err("Could not make output folders: " + output.getParentFile());
 
             if (options.has(diffO)) {
+                boolean optimizeConstantPool = options.has(optimizeConstantPoolO);
+                Predicate<String> pathFilter = createPathFilter(options.valuesOf(includeO), options.valuesOf(excludeO));
+
                 Map<PatchBase, File> baseFiles = new EnumMap<>(PatchBase.class);
                 Map<PatchBase, File> modifiedFiles = new EnumMap<>(PatchBase.class);
                 File clientBase = options.valueOf(clientBaseO);
@@ -104,6 +108,7 @@ public class ConsoleTool {
 
                 DiffOptions diffOptions = new DiffOptions();
                 diffOptions.setOptimizeConstantPool(optimizeConstantPool);
+                diffOptions.setPathFilter(pathFilter);
                 Generator.createPatchBundle(
                         baseFiles,
                         modifiedFiles,
@@ -136,6 +141,13 @@ public class ConsoleTool {
             parser.printHelpOn(System.out);
             e.printStackTrace();
         }
+    }
+
+    private static Predicate<String> createPathFilter(List<String> includes, List<String> excludes) {
+        Predicate<String> includeFilter = includes.isEmpty() ? path -> true : Util.createPathFilter(includes);
+        Predicate<String> excludeFilter = excludes.isEmpty() ? path -> false : Util.createPathFilter(excludes);
+
+        return excludeFilter.negate().and(includeFilter);
     }
 
     private static void listPatchBundle(File patchBundleFile) throws IOException {
