@@ -155,15 +155,16 @@ public class ConsoleTool {
 
         try (PatchBundleReader reader = new PatchBundleReader(patchBundleFile)) {
             List<PatchBase> bases = new ArrayList<>(reader.getSupportedBaseTypes());
-            int colCount = 3 + bases.size();
+            int colCount = 4 + bases.size();
 
             // Create a header row (both to be used for determining column width and printing it)
             String[] headerRow = new String[colCount];
             headerRow[0] = "Path";
             headerRow[1] = "Operation";
             headerRow[2] = "Base Checksum";
+            headerRow[3] = "Size";
             for (int i = 0; i < bases.size(); i++) {
-                headerRow[3 + i] = bases.get(i).name();
+                headerRow[4 + i] = bases.get(i).name();
             }
             rows.add(headerRow);
 
@@ -172,8 +173,9 @@ public class ConsoleTool {
                 col[0] = patch.getTargetPath();
                 col[1] = patch.getOperation().name();
                 col[2] = patch.getOperation() == PatchOperation.MODIFY ? Long.toHexString(patch.getBaseChecksumUnsigned()) : "";
+                col[3] = patch.getOperation() != PatchOperation.REMOVE ? String.valueOf(patch.getData().length) : "";
                 for (int i = 0; i < bases.size(); i++) {
-                    col[3 + i] = patch.getBaseTypes().contains(bases.get(i)) ? "X" : "";
+                    col[4 + i] = patch.getBaseTypes().contains(bases.get(i)) ? "X" : "";
                 }
                 rows.add(col);
             }
