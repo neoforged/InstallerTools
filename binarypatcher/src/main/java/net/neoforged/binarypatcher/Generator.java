@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -82,6 +83,7 @@ public final class Generator {
         }
 
         Map<DiffTask, DiffTask> tasks = new LinkedHashMap<>();
+        Predicate<String> pathFilter = diffOptions.getPathFilter();
 
         // This will be memory intensive.
         for (PatchBase base : bases) {
@@ -92,8 +94,8 @@ public final class Generator {
                 Enumeration<? extends ZipEntry> baseEntries = baseZip.entries();
                 while (baseEntries.hasMoreElements()) {
                     ZipEntry baseEntry = baseEntries.nextElement();
-                    // We ignore directories
-                    if (baseEntry.isDirectory()) {
+                    // We ignore directories and ignored paths
+                    if (baseEntry.isDirectory() || !pathFilter.test(baseEntry.getName())) {
                         continue;
                     }
 
@@ -136,6 +138,10 @@ public final class Generator {
                     ZipEntry modifiedEntry = modifiedEntries.nextElement();
                     if (modifiedEntry.isDirectory() || baseZip.getEntry(modifiedEntry.getName()) != null) {
                         continue; // We ignore directories and modified entries were already processed
+                    }
+
+                    if (!pathFilter.test(modifiedEntry.getName())) {
+                        continue; // Ignored entry
                     }
 
                     DiffTask task = new DiffTask(
