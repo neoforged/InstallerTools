@@ -5,7 +5,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.TypeAnnotationNode;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -23,6 +25,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * This class applies <a href="https://docs.neoforged.net/toolchain/docs/plugins/mdg/#interface-injection">interface injection</a>
+ * data files, and optionally marks interfaces added in such a way with an annotation.
+ */
 public class InterfaceInjection {
 
     @Nullable
@@ -71,6 +77,8 @@ public class InterfaceInjection {
         if (addedInterfaces.isEmpty()) {
             return;
         }
+
+        int startingInterfaceIndex = cn.interfaces.size();
         cn.interfaces.addAll(addedInterfaces);
 
         String signature = cn.signature;
@@ -85,6 +93,18 @@ public class InterfaceInjection {
 
         if (signature != null) {
             cn.signature = SuperinterfaceSignatureConverter.convert(cn.signature, addedInterfaces);
+        }
+
+        if (annotationMarker != null) {
+            if (cn.visibleTypeAnnotations == null) {
+                cn.visibleTypeAnnotations = new ArrayList<>();
+            }
+
+            for (int i = 0; i < addedInterfaces.size(); i++) {
+                int interfaceIndex = startingInterfaceIndex + i;
+                int typeRef = TypeReference.newSuperTypeReference(interfaceIndex).getValue();
+                cn.visitTypeAnnotation(typeRef, null, annotationMarker, true);
+            }
         }
     }
 
