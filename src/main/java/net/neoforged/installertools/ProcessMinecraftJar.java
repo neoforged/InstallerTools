@@ -106,7 +106,7 @@ public class ProcessMinecraftJar extends Task {
         OptionSpec<File> outputLibrariesArg = parser.accepts("extract-libraries-to", "Path to an on-disk directory where any embedded libraries will be written to. Applies to the dedicated server.").withRequiredArg().ofType(File.class);
         OptionSpec<File> patchBundleArg = parser.accepts("apply-patches", "Path to a binpatch bundle file with patches to apply.").withRequiredArg().ofType(File.class);
         OptionSpec<Void> noModManifest = parser.accepts("no-mod-manifest", "Disables adding a neoforge.mods.toml mod manifest");
-        OptionSpec<Void> noSideAnnotations = parser.accepts("no-side-annotations", "Disables adding @OnlyIn annotations when merging client and server jars");
+        OptionSpec<Void> noDistAnnotations = parser.accepts("no-dist-annotations", "Disables adding @OnlyIn annotations when merging client and server jars");
         OptionSpec<File> accessTransformerArg = parser.accepts("access-transformer", "Apply an access transformer.").withOptionalArg().ofType(File.class);
         OptionSpec<String> iiAnnotationMarkerArg = parser.accepts("interface-injection-marker", "The name (binary representation) of an annotation to use as a marker for injected interfaces.").withOptionalArg().ofType(String.class);
         OptionSpec<File> iiDataFilesArg = parser.accepts("interface-injection-data", "The paths to read interface injection JSON files from.").withOptionalArg().ofType(File.class);
@@ -150,9 +150,9 @@ public class ProcessMinecraftJar extends Task {
         }
 
         boolean addModManifest = !options.has(noModManifest);
-        boolean addSideAnnotations = !options.has(noSideAnnotations);
+        boolean addDistAnnotations = !options.has(noDistAnnotations);
 
-        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, addSideAnnotations);
+        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, addDistAnnotations);
 
         logElapsed("overall work", start);
     }
@@ -170,7 +170,7 @@ public class ProcessMinecraftJar extends Task {
                             AccessTransformerEngine accessTransformers,
                             @Nullable
                             InterfaceInjection interfaceInjection,
-                            boolean addSideAnnotations) {
+                            boolean addDistAnnotations) {
 
         CompletableFuture<Map<String, InputFileEntry>> outputEntries;
         if (mergeInputFile == null) {
@@ -179,7 +179,7 @@ public class ProcessMinecraftJar extends Task {
             CompletableFuture<Map<String, InputFileEntry>> inputEntriesFuture = supplyAsync("load " + inputFile.getName(), () -> loadInputZip(inputFile, librariesFolder));
             CompletableFuture<Map<String, InputFileEntry>> mergeInputEntriesFuture = supplyAsync("load " + mergeInputFile.getName(), () -> loadInputZip(mergeInputFile, librariesFolder));
 
-            outputEntries = inputEntriesFuture.thenCombine(mergeInputEntriesFuture, (a, b) -> merge(a, b, addSideAnnotations));
+            outputEntries = inputEntriesFuture.thenCombine(mergeInputEntriesFuture, (a, b) -> merge(a, b, addDistAnnotations));
         }
 
         if (inputMappingsFile != null) {
@@ -578,7 +578,7 @@ public class ProcessMinecraftJar extends Task {
      * <p>Note that this applies a heuristic that assumes files are not *different* between two versions,
      * and if they are, the client version is used.
      */
-    private Map<String, InputFileEntry> merge(Map<String, InputFileEntry> entriesLeft, Map<String, InputFileEntry> entriesRight, boolean addSideAnnotations) {
+    private Map<String, InputFileEntry> merge(Map<String, InputFileEntry> entriesLeft, Map<String, InputFileEntry> entriesRight, boolean addDistAnnotations) {
         long start = System.nanoTime();
 
         try {
@@ -607,18 +607,18 @@ public class ProcessMinecraftJar extends Task {
                 if (serverEntry == null) {
                     mergedManifest.getEntries().put(entry.getKey(), clientOnlyAttrs);
                     clientExclusiveFiles++;
-                    if (addSideAnnotations) {
-                        entry.setValue(addSideAnnotation(entry.getValue(), DIST_CLIENT));
+                    if (addDistAnnotations) {
+                        entry.setValue(addDistAnnotation(entry.getValue(), DIST_CLIENT));
                     }
                 }
             }
 
-            // Merge over server-only files, after applying side-annotations
+            // Merge over server-only files, after applying dist-annotations
             int serverExclusiveFiles = serverEntries.size();
             for (Map.Entry<String, InputFileEntry> entry : serverEntries.entrySet()) {
                 mergedManifest.getEntries().put(entry.getKey(), serverOnlyAttrs);
-                if (addSideAnnotations) {
-                    entry.setValue(addSideAnnotation(entry.getValue(), DIST_SERVER));
+                if (addDistAnnotations) {
+                    entry.setValue(addDistAnnotation(entry.getValue(), DIST_SERVER));
                 }
             }
             clientEntries.putAll(serverEntries);
@@ -638,7 +638,7 @@ public class ProcessMinecraftJar extends Task {
         }
     }
 
-    private InputFileEntry addSideAnnotation(InputFileEntry entry, String dist) {
+    private InputFileEntry addDistAnnotation(InputFileEntry entry, String dist) {
         if (!entry.name.endsWith(".class")) {
             return entry;
         }
