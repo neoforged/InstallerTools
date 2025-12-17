@@ -451,6 +451,10 @@ public class ProcessMinecraftJar extends Task {
                     continue;
                 }
 
+                if (isSignatureFile(zipEntry.getName())) {
+                    continue;
+                }
+
                 bout.reset();
                 try (InputStream in = zipFile.getInputStream(zipEntry)) {
                     int read;
@@ -468,6 +472,19 @@ public class ProcessMinecraftJar extends Task {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to open input zip " + inputFile, e);
         }
+    }
+
+    /**
+     * We're about to mod the game. Signatures are not useful.
+     * Always strip signature related files from META-INF.
+     * See: https://docs.oracle.com/en/java/javase/21/docs/specs/jar/jar.html
+     */
+    private static boolean isSignatureFile(String filename) {
+        final String metaInf = "META-INF/";
+        if (filename.startsWith(metaInf) && filename.lastIndexOf('/') == metaInf.length() - 1) {
+            return filename.endsWith(".SF") || filename.endsWith(".RSA") || filename.endsWith(".DSA") || filename.endsWith(".EC");
+        }
+        return false;
     }
 
     private static ZipFile openMinecraftJar(File inputFile, @Nullable File librariesFolder) throws IOException {

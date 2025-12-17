@@ -61,6 +61,11 @@ class ProcessMinecraftJarTest {
             out.closeEntry();
             out.putNextEntry(new ZipEntry("assets/client_only.json"));
             out.closeEntry();
+
+            out.putNextEntry(new ZipEntry("META-INF/MOJANGCS.SF"));
+            out.closeEntry();
+            out.putNextEntry(new ZipEntry("META-INF/MOJANGCS.RSA"));
+            out.closeEntry();
         }
 
         Path serverJar = tempDir.resolve("server_inner.jar");
@@ -72,6 +77,11 @@ class ProcessMinecraftJarTest {
             out.putNextEntry(new ZipEntry("assets/lang/en_us.json"));
             out.closeEntry();
             out.putNextEntry(new ZipEntry("data/server_only.json"));
+            out.closeEntry();
+
+            out.putNextEntry(new ZipEntry("META-INF/MOJANGCS.SF"));
+            out.closeEntry();
+            out.putNextEntry(new ZipEntry("META-INF/MOJANGCS.RSA"));
             out.closeEntry();
         }
 
