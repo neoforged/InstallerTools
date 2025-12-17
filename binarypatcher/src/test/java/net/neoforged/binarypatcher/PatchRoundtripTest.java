@@ -294,12 +294,12 @@ public class PatchRoundtripTest {
 
         // Apply patch with CLIENT base
         File clientOutput = tempDir.resolve("client_output.zip").toFile();
-        Patcher.patch(clientBaseFile, PatchBase.CLIENT, Collections.singletonList(patchBundleFile), clientOutput);
+        Patcher.patch(clientBaseFile, PatchBase.CLIENT, Collections.singletonList(patchBundleFile), clientOutput, this::debug);
         assertThat(readZipEntries(clientOutput)).containsExactlyInAnyOrderEntriesOf(modifiedClientEntries);
 
         // Apply patch with SERVER base
         File serverOutput = tempDir.resolve("server_output.zip").toFile();
-        Patcher.patch(serverBaseFile, PatchBase.SERVER, Collections.singletonList(patchBundleFile), serverOutput);
+        Patcher.patch(serverBaseFile, PatchBase.SERVER, Collections.singletonList(patchBundleFile), serverOutput, this::debug);
         assertThat(readZipEntries(serverOutput)).containsExactlyInAnyOrderEntriesOf(modifiedServerEntries);
     }
 
@@ -331,7 +331,7 @@ public class PatchRoundtripTest {
 
         // Try to apply CLIENT patch with SERVER base type - should fail
         assertThatThrownBy(() -> {
-            Patcher.patch(serverBaseFile, PatchBase.SERVER, Collections.singletonList(patchBundleFile), outputFile);
+            Patcher.patch(serverBaseFile, PatchBase.SERVER, Collections.singletonList(patchBundleFile), outputFile, this::debug);
         }).isInstanceOf(Exception.class); // Could be IOException, IllegalArgumentException, etc.
     }
 
@@ -398,7 +398,7 @@ public class PatchRoundtripTest {
         Map<PatchBase, File> modifiedFiles = new LinkedHashMap<>();
         modifiedFiles.put(PatchBase.CLIENT, modifiedFile);
         Generator.createPatchBundle(baseFiles, modifiedFiles, patchBundleFile, DIFF_OPTIONS);
-        Patcher.patch(baseFile, PatchBase.CLIENT, Collections.singletonList(patchBundleFile), outputFile);
+        Patcher.patch(baseFile, PatchBase.CLIENT, Collections.singletonList(patchBundleFile), outputFile, this::debug);
     }
 
     /**
@@ -486,5 +486,9 @@ public class PatchRoundtripTest {
             }
         }
         return result;
+    }
+
+    private void debug(String message) {
+        System.out.println(message);
     }
 }

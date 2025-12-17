@@ -61,6 +61,7 @@ dependencyResolutionManagement {
 include(':cli-utils')
 include(':jarsplitter')
 include(':binarypatcher')
+include(':binarypatch-applier')
 include(':zipinject')
 include(':problems-api')
 

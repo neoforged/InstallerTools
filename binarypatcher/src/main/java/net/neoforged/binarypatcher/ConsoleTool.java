@@ -132,7 +132,7 @@ public class ConsoleTool {
                 long startLoadingPatches = System.currentTimeMillis();
                 debug("Loaded patches in " + (System.currentTimeMillis() - startLoadingPatches) + "ms");
 
-                Patcher.patch(baseFile, baseType, patches, output);
+                Patcher.patch(baseFile, baseType, patches, output, ConsoleTool::debug);
 
                 debug("Completed in " + (System.currentTimeMillis() - start) + "ms");
             } else {
