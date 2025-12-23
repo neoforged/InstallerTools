@@ -92,6 +92,10 @@ public class ProcessMinecraftJar extends Task {
 
     private static final String ENTRYPOINT_CLIENT = "net/minecraft/client/main/Main.class";
     private static final String ENTRYPOINT_SERVER = "net/minecraft/server/Main.class";
+    /**
+     * Server entrypoint used pre-1.16
+     */
+    private static final String ENTRYPOINT_SERVER_OLD = "net/minecraft/server/MinecraftServer.class";
 
     @Override
     public void process(String[] args) throws IOException {
@@ -510,7 +514,7 @@ public class ProcessMinecraftJar extends Task {
 
     private static String detectDistribution(Map<String, InputFileEntry> entries) throws IOException {
         boolean hasClientEntrypoint = entries.containsKey(ENTRYPOINT_CLIENT);
-        boolean hasServerEntrypoint = entries.containsKey(ENTRYPOINT_SERVER);
+        boolean hasServerEntrypoint = entries.containsKey(ENTRYPOINT_SERVER) || entries.containsKey(ENTRYPOINT_SERVER_OLD);
 
         if (!hasClientEntrypoint && hasServerEntrypoint) {
             return DIST_SERVER;
