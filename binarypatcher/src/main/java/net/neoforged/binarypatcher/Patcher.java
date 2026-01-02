@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -27,7 +28,7 @@ public class Patcher {
     private Patcher() {
     }
 
-    public static void patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile) {
+    public static void patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile, Consumer<String> debugOutput) {
         TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!
 
         try (ZipFile baseZip = new ZipFile(baseFile)) {
@@ -35,7 +36,7 @@ public class Patcher {
             Map<String, byte[]> patchedContent = new HashMap<>();
 
             for (File patchBundleFile : patchBundleFiles) {
-                applyPatchBundle(baseFile, baseType, patchBundleFile, patchedContent, baseZip);
+                applyPatchBundle(baseFile, baseType, patchBundleFile, patchedContent, baseZip, debugOutput);
             }
 
             // Now stream out the new entries
@@ -49,7 +50,6 @@ public class Patcher {
 
                     byte[] patched = patchedContent.remove(entry.getName());
                     if (patched == DELETION_MARKER) {
-                        debug("Deleting " + entry.getName());
                         continue; // Skip deleted file
                     } else  {
                         // We must create a new entry since we cannot reset the CRC to -1
@@ -82,7 +82,12 @@ public class Patcher {
 
     }
 
-    private static void applyPatchBundle(File baseFile, PatchBase baseType, File patchBundleFile, Map<String, byte[]> patchedContent, ZipFile baseZip) throws IOException {
+    private static void applyPatchBundle(File baseFile,
+                                         PatchBase baseType,
+                                         File patchBundleFile,
+                                         Map<String, byte[]> patchedContent,
+                                         ZipFile baseZip,
+                                         Consumer<String> debugOutput) throws IOException {
         try (PatchBundleReader patchBundle = new PatchBundleReader(patchBundleFile)) {
             if (!patchBundle.getSupportedBaseTypes().contains(baseType)) {
                 throw new IllegalArgumentException("Cannot apply patch bundle " + patchBundleFile + " to " + baseFile + " because it only applies to the base types " + patchBundle.getSupportedBaseTypes());
@@ -96,12 +101,15 @@ public class Patcher {
 
                 switch (patch.getOperation()) {
                     case CREATE:
+                        debugOutput.accept("Adding " + patch.getTargetPath());
                         patchedContent.put(patch.getTargetPath(), patch.getData());
                         break;
                     case MODIFY:
+                        debugOutput.accept("Patching " + patch.getTargetPath());
                         applyPatch(patch, baseZip, patchedContent);
                         break;
                     case REMOVE:
+                        debugOutput.accept("Deleting " + patch.getTargetPath());
                         patchedContent.put(patch.getTargetPath(), DELETION_MARKER);
                         break;
                 }
@@ -134,16 +142,6 @@ public class Patcher {
         ZipEntry ret = new ZipEntry(name);
         ret.setTime(ZIPTIME);
         return ret;
-    }
-
-    private static void debug(String message) {
-        if (ConsoleTool.DEBUG) {
-            System.out.println(message);
-        }
-    }
-
-    private void log(String message) {
-        System.out.println(message);
     }
 
 }

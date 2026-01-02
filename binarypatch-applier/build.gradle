@@ -1,0 +1,94 @@
+buildscript {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.guardsquare:proguard-gradle:7.5.0'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow'
+}
+
+apply plugin : ProjectDefaultsPlugin
+
+dependencies {
+    shadow(project(':binarypatcher'))
+}
+
+shadow {
+    // We want to publish the proguard jar instead
+    addShadowVariantIntoJavaComponent = false
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    exclude('META-INF/maven/**')
+    exclude('**/*.properties')
+
+    archiveClassifier = 'fatjar'
+    addMultiReleaseAttribute = false
+    manifest.attributes['Automatic-Module-Name'] = 'net.neoforged.binarypatchapplier'
+
+    enableAutoRelocation = true
+    relocationPrefix = 'net.neoforged.internal.binarypatchapplier'
+    relocate('net.neoforged.binarypatcher', 'net.neoforged.internal.binarypatchapplier')
+    relocate('com.nothome.delta', 'net.neoforged.internal.binarypatchapplier.xdelta')
+    relocate('org.tukaani.xz', 'net.neoforged.internal.binarypatchapplier.xz')
+}
+
+File proguardFile = file("build/libs/${jar.archiveBaseName.get()}-${version}-proguard.jar")
+
+final proguardJar = tasks.register('proguardJar', proguard.gradle.ProGuardTask) {
+    group = 'build'
+    dependsOn shadowJar
+    inputs.file(shadowJar.archiveFile)
+    inputs.file(file("proguard.conf"))
+
+    if (JavaLanguageVersion.current().asInt() <= 8) {
+        libraryjars "${System.getProperty('java.home')}/lib/rt.jar"
+    } else {
+        libraryjars "${System.getProperty('java.home')}/jmods"
+    }
+    libraryjars(configurations.compileClasspath)
+
+    // Exclude superfluous licenses in META-INF/, and also exclude some unused resources from apache commons codec,
+    // which compress transitively depends on
+    injars(shadowJar.archiveFile)
+    outjars proguardFile
+    configuration file("proguard.conf")
+}
+assemble.dependsOn proguardJar
+
+configurations {
+    apiElements {
+        outgoing {
+            artifacts.clear()
+            artifact(proguardJar) {
+                classifier = null
+            }
+        }
+    }
+    runtimeElements {
+        outgoing {
+            artifacts.clear()
+            artifact(proguardJar) {
+                classifier = null
+            }
+        }
+    }
+}
+
+publishing {
+    publications.register('mavenJava', MavenPublication) {
+        from components.java
+
+        pom {
+            name = 'Binary Patch Applier'
+            description = 'Minimal artifact to apply the binary patch bundles created by binarypatcher.'
+        }
+    }
+}
