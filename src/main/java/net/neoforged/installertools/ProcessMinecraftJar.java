@@ -63,6 +63,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -96,6 +98,8 @@ public class ProcessMinecraftJar extends Task {
      * Server entrypoint used pre-1.16
      */
     private static final String ENTRYPOINT_SERVER_OLD = "net/minecraft/server/MinecraftServer.class";
+
+    private ExecutorService executor;
 
     @Override
     public void process(String[] args) throws IOException {
@@ -156,7 +160,31 @@ public class ProcessMinecraftJar extends Task {
         boolean addModManifest = !options.has(noModManifest);
         boolean addDistAnnotations = !options.has(noDistAnnotations);
 
-        processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, addDistAnnotations);
+        // Address that CompletableFuture#*Async will run using thread-per-task if the fork join pool has parallelism < 2
+        // in Java < 25. Specifically when we pass this executor to ART, this may spawn thousands of OS threads leading to
+        // OOM or thread-limit issues.
+        ExecutorService ownedExecutor = null;
+        if (ForkJoinPool.getCommonPoolParallelism() < 2) {
+            log("Using dedicated worker thread for processing");
+            executor = ownedExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r);
+                t.setName("ProcessMinecraftJarWorker");
+                t.setDaemon(true);
+                return t;
+            });
+        } else {
+            log("Using common thread-pool with parallelism " + ForkJoinPool.getCommonPoolParallelism());
+            executor = ForkJoinPool.commonPool();
+        }
+
+        try {
+            processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, addDistAnnotations);
+        } finally {
+            if (ownedExecutor != null) {
+                ownedExecutor.shutdownNow();
+            }
+            executor = null;
+        }
 
         logElapsed("overall work", start);
     }
@@ -190,7 +218,7 @@ public class ProcessMinecraftJar extends Task {
             CompletableFuture<IMappingFile> mappings = supplyAsync("load mappings", () -> loadMappings(inputMappingsFile));
             if (neoformDataFile != null) {
                 CompletableFuture<IMappingFile> parameterMappings = supplyAsync("load parameter mappings", () -> loadNeoformMappings(neoformDataFile));
-                mappings = mappings.thenCombineAsync(parameterMappings, this::mergeMappings);
+                mappings = mappings.thenCombineAsync(parameterMappings, this::mergeMappings, executor);
             }
             outputEntries = allOfThenCompose(outputEntries, mappings, this::deobfuscateJar);
         }
@@ -201,7 +229,7 @@ public class ProcessMinecraftJar extends Task {
 
             // We have a joined source distribution if both inputs are given
             boolean joined = mergeInputFile != null;
-            outputEntries = outputEntries.thenCombineAsync(patches, (entries, bundle) -> applyPatches(entries, bundle, joined));
+            outputEntries = outputEntries.thenCombineAsync(patches, (entries, bundle) -> applyPatches(entries, bundle, joined), executor);
         }
 
         if (accessTransformers != null || interfaceInjection != null) {
@@ -255,7 +283,8 @@ public class ProcessMinecraftJar extends Task {
                 if (accessTransformers != null && accessTransformers.containsClassTarget(classType)
                         || interfaceInjection != null && interfaceInjection.containsClassTarget(classType)) {
                     futures.add(CompletableFuture.runAsync(
-                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection))
+                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection)),
+                            executor
                     ));
                 }
             }
@@ -574,7 +603,7 @@ public class ProcessMinecraftJar extends Task {
                 .map(entry -> Transformer.Entry.ofFile(entry.name, entry.lastModified, entry.content))
                 .collect(Collectors.toList());
 
-        return renamer.run(entries, ForkJoinPool.commonPool())
+        return renamer.run(entries, executor)
                 .thenApply(entryList -> {
                     try {
                         renamer.close();
@@ -706,7 +735,7 @@ public class ProcessMinecraftJar extends Task {
     }
 
     private <T> CompletableFuture<T> supplyAsync(String task, ThrowingSupplier<T> callable) {
-        return CompletableFuture.supplyAsync(wrapTask(task, callable));
+        return CompletableFuture.supplyAsync(wrapTask(task, callable), executor);
     }
 
     private <T1, T2, R> CompletableFuture<R> allOfThenCompose(CompletableFuture<T1> f1, CompletableFuture<T2> f2, BiFunction<T1, T2, CompletableFuture<R>> combiner) {
