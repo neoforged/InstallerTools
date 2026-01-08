@@ -6,17 +6,22 @@ package net.neoforged.binarypatcher;
 
 import com.nothome.delta.GDiffPatcher;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimeZone;
+import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -28,15 +33,92 @@ public class Patcher {
     private Patcher() {
     }
 
-    public static void patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile, Consumer<String> debugOutput) {
-        TimeZone.setDefault(TimeZone.getTimeZone("GMT")); //Fix Java stupidity that causes timestamps in zips to depend on user's timezone!
+    public static void patch(File baseFile, PatchBase baseType, String inputName, InputStream input, File outputFile, Consumer<String> debugOutput) {
+        List<Input> inputs = Collections.singletonList(new StreamInput(inputName, input));
+        patchInternal(baseFile, baseType, inputs, outputFile, debugOutput);
+    }
 
+    public static void patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile, Consumer<String> debugOutput) {
+        List<Input> fileInputs = patchBundleFiles.stream().map(FileInput::new).collect(Collectors.toList());
+        patchInternal(baseFile, baseType, fileInputs, outputFile, debugOutput);
+    }
+
+    private interface Input {
+        InputStream open() throws IOException;
+
+        String name();
+    }
+
+    private static class FileInput implements Input {
+        private final File file;
+
+        public FileInput(File file) {
+            this.file = file;
+        }
+
+        @Override
+        public String name() {
+            return file.getName();
+        }
+
+        @Override
+        public InputStream open() throws IOException {
+            return new BufferedInputStream(new FileInputStream(file));
+        }
+    }
+
+    private static class StreamInput implements Input {
+        private final String name;
+        private InputStream stream;
+
+        public StreamInput(String name, InputStream stream) {
+            this.name = name;
+            this.stream = Objects.requireNonNull(stream, "stream");
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public InputStream open() throws IOException {
+            if (stream == null) {
+                throw new IOException("Can only be opened once.");
+            }
+            InputStream result = stream;
+            stream = null;
+            return result;
+        }
+    }
+
+    private static void patchInternal(File baseFile, PatchBase baseType, List<Input> patchBundles, File
+            outputFile, Consumer<String> debugOutput) {
         try (ZipFile baseZip = new ZipFile(baseFile)) {
             // Just keep content in-memory that has been touched
             Map<String, byte[]> patchedContent = new HashMap<>();
 
-            for (File patchBundleFile : patchBundleFiles) {
-                applyPatchBundle(baseFile, baseType, patchBundleFile, patchedContent, baseZip, debugOutput);
+            for (Input patchBundleInput : patchBundles) {
+                String patchBundleName = patchBundleInput.name();
+                InputStream inputStream;
+                try {
+                    inputStream = patchBundleInput.open();
+                } catch (IOException e) {
+                    throw new UncheckedIOException("Failed to open patch bundle " + patchBundleName, e);
+                }
+                try {
+                    try {
+                        applyPatchBundle(baseType, patchBundleName, inputStream, patchedContent, baseZip, debugOutput);
+                    } finally {
+                        inputStream.close();
+                    }
+                } finally {
+                    try {
+                        inputStream.close();
+                    } catch (IOException ignored) {
+                        debugOutput.accept("Failed to close patch bundle " + patchBundleName);
+                    }
+                }
             }
 
             // Now stream out the new entries
@@ -51,7 +133,7 @@ public class Patcher {
                     byte[] patched = patchedContent.remove(entry.getName());
                     if (patched == DELETION_MARKER) {
                         continue; // Skip deleted file
-                    } else  {
+                    } else {
                         // We must create a new entry since we cannot reset the CRC to -1
                         ZipEntry newEntry = Util.copyEntry(entry);
 
@@ -82,15 +164,15 @@ public class Patcher {
 
     }
 
-    private static void applyPatchBundle(File baseFile,
-                                         PatchBase baseType,
-                                         File patchBundleFile,
+    private static void applyPatchBundle(PatchBase baseType,
+                                         String patchBundleName,
+                                         InputStream patchBundleData,
                                          Map<String, byte[]> patchedContent,
                                          ZipFile baseZip,
                                          Consumer<String> debugOutput) throws IOException {
-        try (PatchBundleReader patchBundle = new PatchBundleReader(patchBundleFile)) {
+        try (PatchBundleReader patchBundle = new PatchBundleReader(patchBundleData)) {
             if (!patchBundle.getSupportedBaseTypes().contains(baseType)) {
-                throw new IllegalArgumentException("Cannot apply patch bundle " + patchBundleFile + " to " + baseFile + " because it only applies to the base types " + patchBundle.getSupportedBaseTypes());
+                throw new IllegalArgumentException("Cannot apply patch bundle " + patchBundleName + " to " + baseZip.getName() + " because it only applies to the base types " + patchBundle.getSupportedBaseTypes());
             }
 
             for (Patch patch : patchBundle) {
@@ -117,7 +199,8 @@ public class Patcher {
         }
     }
 
-    private static void applyPatch(Patch patch, ZipFile baseZip, Map<String, byte[]> patchedContent) throws IOException {
+    private static void applyPatch(Patch patch, ZipFile baseZip, Map<String, byte[]> patchedContent) throws
+            IOException {
         byte[] currentData = patchedContent.get(patch.getTargetPath());
         if (currentData == null) {
             ZipEntry entry = baseZip.getEntry(patch.getTargetPath());
