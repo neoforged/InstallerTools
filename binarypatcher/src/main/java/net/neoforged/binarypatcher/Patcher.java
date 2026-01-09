@@ -14,6 +14,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -33,14 +36,29 @@ public class Patcher {
     private Patcher() {
     }
 
-    public static void patch(File baseFile, PatchBase baseType, String inputName, InputStream input, File outputFile, Consumer<String> debugOutput) {
-        List<Input> inputs = Collections.singletonList(new StreamInput(inputName, input));
-        patchInternal(baseFile, baseType, inputs, outputFile, debugOutput);
+    public static final class Result {
+        private final byte[] checksum;
+
+        public Result(byte[] checksum) {
+            this.checksum = checksum;
+        }
+
+        /**
+         * SHA-256 checksum of the output file.
+         */
+        public byte[] getChecksum() {
+            return checksum;
+        }
     }
 
-    public static void patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile, Consumer<String> debugOutput) {
+    public static Result patch(File baseFile, PatchBase baseType, String inputName, InputStream input, File outputFile, Consumer<String> debugOutput) {
+        List<Input> inputs = Collections.singletonList(new StreamInput(inputName, input));
+        return patchInternal(baseFile, baseType, inputs, outputFile, debugOutput);
+    }
+
+    public static Result patch(File baseFile, PatchBase baseType, List<File> patchBundleFiles, File outputFile, Consumer<String> debugOutput) {
         List<Input> fileInputs = patchBundleFiles.stream().map(FileInput::new).collect(Collectors.toList());
-        patchInternal(baseFile, baseType, fileInputs, outputFile, debugOutput);
+        return patchInternal(baseFile, baseType, fileInputs, outputFile, debugOutput);
     }
 
     private interface Input {
@@ -92,7 +110,7 @@ public class Patcher {
         }
     }
 
-    private static void patchInternal(File baseFile, PatchBase baseType, List<Input> patchBundles, File
+    private static Result patchInternal(File baseFile, PatchBase baseType, List<Input> patchBundles, File
             outputFile, Consumer<String> debugOutput) {
         try (ZipFile baseZip = new ZipFile(baseFile)) {
             // Just keep content in-memory that has been touched
@@ -122,7 +140,13 @@ public class Patcher {
             }
 
             // Now stream out the new entries
-            try (ZipOutputStream zOut = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outputFile)))) {
+            MessageDigest digest;
+            try {
+                digest = MessageDigest.getInstance("SHA-256");
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException("Standard algorithm is unavailable.", e);
+            }
+            try (ZipOutputStream zOut = new ZipOutputStream(new BufferedOutputStream(new DigestOutputStream(new FileOutputStream(outputFile), digest)))) {
                 Enumeration<? extends ZipEntry> entries = baseZip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
@@ -158,10 +182,11 @@ public class Patcher {
                     zOut.closeEntry();
                 }
             }
+
+            return new Result(digest.digest());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-
     }
 
     private static void applyPatchBundle(PatchBase baseType,
