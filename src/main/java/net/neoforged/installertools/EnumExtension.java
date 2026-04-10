@@ -87,6 +87,9 @@ public class EnumExtension {
 
     public void transform(ClassNode cn, Type type) {
         Set<String> entries = extensions.get(type.getInternalName());
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
         List<String> sortedEntries = entries.stream().sorted().collect(Collectors.toList());
         for (String entry : sortedEntries) {
             FieldNode field = new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, entry, type.getDescriptor(), null, null);
