@@ -92,7 +92,7 @@ public class EnumExtension {
         }
         List<String> sortedEntries = entries.stream().sorted().collect(Collectors.toList());
         for (String entry : sortedEntries) {
-            FieldNode field = new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, entry, type.getDescriptor(), null, null);
+            FieldNode field = new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL | Opcodes.ACC_ENUM, entry, type.getDescriptor(), null, null);
             List<AnnotationNode> invisibleAnnotations = new ArrayList<>();
             invisibleAnnotations.add(new AnnotationNode(
                     Type.getObjectType(annotationMarker).getDescriptor()

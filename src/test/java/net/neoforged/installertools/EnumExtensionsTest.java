@@ -52,6 +52,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EnumExtensionsTest {
     @Test
@@ -116,7 +117,8 @@ class EnumExtensionsTest {
             Field[] fields = loadedClass.getFields();
             assertEquals(4, fields.length, "Should have 4 enum entries (original 3 + 1 extension)");
             assertEquals("D", fields[3].getName(), "The new enum entry should be named D");
-            assertEquals(Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL, fields[3].getModifiers(), "The new enum entry should be public static final");
+            assertEquals(Modifier.PUBLIC | Modifier.STATIC | Modifier.FINAL | 0x4000 /* ACC_ENUM */, fields[3].getModifiers(), "The new enum entry should be public static final enum");
+            assertTrue(fields[3].isEnumConstant(), "The new field should be an enum constant");
         }
     }
 }
