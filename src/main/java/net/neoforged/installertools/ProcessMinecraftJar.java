@@ -118,6 +118,8 @@ public class ProcessMinecraftJar extends Task {
         OptionSpec<File> accessTransformerArg = parser.accepts("access-transformer", "Apply an access transformer.").withOptionalArg().ofType(File.class);
         OptionSpec<String> iiAnnotationMarkerArg = parser.accepts("interface-injection-marker", "The name (binary representation) of an annotation to use as a marker for injected interfaces.").withOptionalArg().ofType(String.class);
         OptionSpec<File> iiDataFilesArg = parser.accepts("interface-injection-data", "The paths to read interface injection JSON files from.").withOptionalArg().ofType(File.class);
+        OptionSpec<String> eeAnnotationMarkerArg = parser.accepts("enum-extensions-marker", "The name (binary representation) of an annotation to use as a marker for extended enum entries.").withOptionalArg().ofType(String.class);
+        OptionSpec<File> eeDataFilesArg = parser.accepts("enum-extensions-data", "The paths to read enum extension JSON files from.").withOptionalArg().ofType(File.class);
 
         OptionSet options;
         try {
@@ -145,6 +147,9 @@ public class ProcessMinecraftJar extends Task {
         List<File> accessTransformerFiles = options.valuesOf(accessTransformerArg);
         String iiAnnotationMarker = options.valueOf(iiAnnotationMarkerArg);
         List<File> iiDataFiles = options.valuesOf(iiDataFilesArg);
+        
+        String eeAnnotationMarker = options.valueOf(eeAnnotationMarkerArg);
+        List<File> eeDataFiles = options.valuesOf(eeDataFilesArg);
 
         AccessTransformerEngine accessTransformers = null;
         if (!accessTransformerFiles.isEmpty()) {
@@ -155,6 +160,12 @@ public class ProcessMinecraftJar extends Task {
             long iiStart = System.nanoTime();
             interfaceInjection = new InterfaceInjection(iiDataFiles, iiAnnotationMarker);
             logElapsed("load interface injection data", iiStart);
+        }
+        EnumExtension enumExtension = null;
+        if (!eeDataFiles.isEmpty()) {
+            long eeStart = System.nanoTime();
+            enumExtension = new EnumExtension(eeDataFiles, eeAnnotationMarker);
+            logElapsed("load enum extension data", eeStart);
         }
 
         boolean addModManifest = !options.has(noModManifest);
@@ -178,7 +189,7 @@ public class ProcessMinecraftJar extends Task {
         }
 
         try {
-            processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, addDistAnnotations);
+            processZip(inputFile, inputMappingsFile, mergeInputFile, outputFile, librariesFolder, neoformDataFile, patchBundleFile, addModManifest, accessTransformers, interfaceInjection, enumExtension, addDistAnnotations);
         } finally {
             if (ownedExecutor != null) {
                 ownedExecutor.shutdownNow();
@@ -202,6 +213,8 @@ public class ProcessMinecraftJar extends Task {
                             AccessTransformerEngine accessTransformers,
                             @Nullable
                             InterfaceInjection interfaceInjection,
+                            @Nullable
+                            EnumExtension enumExtension,
                             boolean addDistAnnotations) {
 
         CompletableFuture<Map<String, InputFileEntry>> outputEntries;
@@ -232,8 +245,8 @@ public class ProcessMinecraftJar extends Task {
             outputEntries = outputEntries.thenCombineAsync(patches, (entries, bundle) -> applyPatches(entries, bundle, joined), executor);
         }
 
-        if (accessTransformers != null || interfaceInjection != null) {
-            outputEntries = outputEntries.thenCompose(entries -> applyDevTransforms(entries, accessTransformers, interfaceInjection));
+        if (accessTransformers != null || interfaceInjection != null || enumExtension != null) {
+            outputEntries = outputEntries.thenCompose(entries -> applyDevTransforms(entries, accessTransformers, interfaceInjection, enumExtension));
         }
 
         CompletableFuture<Void> outputFileFuture = outputEntries.thenAccept(outputFileEntries -> {
@@ -272,7 +285,8 @@ public class ProcessMinecraftJar extends Task {
 
     private CompletableFuture<Map<String, InputFileEntry>> applyDevTransforms(Map<String, InputFileEntry> entries,
                                                                               @Nullable AccessTransformerEngine accessTransformers,
-                                                                              @Nullable InterfaceInjection interfaceInjection) {
+                                                                              @Nullable InterfaceInjection interfaceInjection,
+                                                                              @Nullable EnumExtension enumExtension) {
         long start = System.nanoTime();
 
         // Find all classes that are targeted by access transformers
@@ -281,9 +295,10 @@ public class ProcessMinecraftJar extends Task {
             if (entry.getKey().endsWith(".class")) {
                 Type classType = Type.getObjectType(entry.getKey().substring(0, entry.getKey().length() - 6));
                 if (accessTransformers != null && accessTransformers.containsClassTarget(classType)
-                        || interfaceInjection != null && interfaceInjection.containsClassTarget(classType)) {
+                        || interfaceInjection != null && interfaceInjection.containsClassTarget(classType)
+                        || enumExtension != null && enumExtension.containsClassTarget(classType)) {
                     futures.add(CompletableFuture.runAsync(
-                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection)),
+                            () -> entry.setValue(applyAccessTransformers(entry.getValue(), classType, accessTransformers, interfaceInjection, enumExtension)),
                             executor
                     ));
                 }
@@ -299,13 +314,17 @@ public class ProcessMinecraftJar extends Task {
     private InputFileEntry applyAccessTransformers(InputFileEntry entry,
                                                    Type type,
                                                    @Nullable AccessTransformerEngine accessTransformers,
-                                                   @Nullable InterfaceInjection interfaceInjection) {
+                                                   @Nullable InterfaceInjection interfaceInjection,
+                                                   @Nullable EnumExtension enumExtension) {
         return applyClassTransform(entry, classNode -> {
             if (accessTransformers != null) {
                 accessTransformers.transform(classNode, type);
             }
             if (interfaceInjection != null) {
                 interfaceInjection.transform(classNode, type);
+            }
+            if (enumExtension != null) {
+                enumExtension.transform(classNode, type);
             }
         });
     }
