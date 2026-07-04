@@ -25,7 +25,6 @@ import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.TypeAnnotationNode;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -97,7 +96,12 @@ public class InterfaceInjection {
         }
 
         int startingInterfaceIndex = cn.interfaces.size();
-        cn.interfaces.addAll(addedInterfaces);
+        for (String itf : addedInterfaces) {
+            // Strip generic signatures to match the expected format of ClassNode#interfaces 
+            int genericsStart = itf.indexOf('<');
+            String stripped = genericsStart != -1 ? itf.substring(0, genericsStart) : itf;
+            cn.interfaces.add(stripped);
+        }
 
         String signature = cn.signature;
 
